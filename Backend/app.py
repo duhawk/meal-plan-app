@@ -1,3 +1,5 @@
+
+print("This is the real updated app.py")
 import os
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -9,11 +11,13 @@ from functools import wraps
 from flask import g
 from sqlalchemy import desc
 from sqlalchemy.orm import joinedload
+from flask_cors import CORS
 
 load_dotenv()
   # Load environment variables from .env file
 app = Flask(__name__)
 app.debug = True
+CORS(app)  # Enable CORS for all API routes
 # Define a very basic route. When you visit the root URL, it returns this text.
 # 3. Configure Database Connection for Flask-SQLAlchemy
 # Ensure DATABASE_URL is set as an environment variable (either via .env or export)
