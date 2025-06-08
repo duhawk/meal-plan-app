@@ -1,7 +1,6 @@
 
-print("This is the real updated app.py")
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 from flask_bcrypt import Bcrypt
@@ -16,12 +15,42 @@ from flask_cors import CORS
 load_dotenv()
   # Load environment variables from .env file
 app = Flask(__name__)
-app.debug = True
-CORS(app)  # Enable CORS for all API routes
-# Define a very basic route. When you visit the root URL, it returns this text.
-# 3. Configure Database Connection for Flask-SQLAlchemy
-# Ensure DATABASE_URL is set as an environment variable (either via .env or export)
-# The error means os.getenv('DATABASE_URL') is returning None here
+
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",  # Common React dev port
+            "http://127.0.0.1:3000"
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
+
+# Handle preflight OPTIONS requests
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization")
+        response.headers.add('Access-Control-Allow-Methods', "GET,PUT,POST,DELETE,OPTIONS")
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+# Additional after_request handler
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    if origin in ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000', 'http://127.0.0.1:3000']:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
 database_url = os.getenv('DATABASE_URL')
 
 if database_url is None:
@@ -453,3 +482,5 @@ def delete_meal(meal_id):
 
 
         
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
