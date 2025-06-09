@@ -1,7 +1,6 @@
 
 import os
 from flask import Flask, request, jsonify, make_response
-from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 from flask_bcrypt import Bcrypt
 from datetime import datetime, timedelta
@@ -16,52 +15,32 @@ load_dotenv()
   # Load environment variables from .env file
 app = Flask(__name__)
 
-CORS(app, resources={
-    r"/api/*": {
-        "origins": [
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:3000",  # Common React dev port
-            "http://127.0.0.1:3000"
-        ],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True
-    }
-})
+CORS(
+    app,
+    origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ],
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+    supports_credentials=True
+)
 
 # Handle preflight OPTIONS requests
-@app.before_request
-def handle_preflight():
-    if request.method == "OPTIONS":
-        response = make_response()
-        response.headers.add("Access-Control-Allow-Origin", request.headers.get('Origin', '*'))
-        response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization")
-        response.headers.add('Access-Control-Allow-Methods', "GET,PUT,POST,DELETE,OPTIONS")
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        return response
-
-# Additional after_request handler
-@app.after_request
-def after_request(response):
-    origin = request.headers.get('Origin')
-    if origin in ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000', 'http://127.0.0.1:3000']:
-        response.headers.add('Access-Control-Allow-Origin', origin)
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-    return response
 database_url = os.getenv('DATABASE_URL')
-
 if database_url is None:
-    raise RuntimeError("DATABASE_URL environment variable is not set!") # Add a custom error if it's missing
+    raise RuntimeError("DATABASE_URL environment variable is not set!")
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Recommended to suppress warning
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# 4. Initialize SQLAlchemy with the Flask app
-db = SQLAlchemy(app)
+# Initialize database and bcrypt
+from database import db
+db.init_app(app)
 bcrypt = Bcrypt(app)
+
 
 def jwt_required(f):
     @wraps(f)
@@ -126,6 +105,8 @@ def register_user():
         email=email,
         password_hash=hashed_password,
         name=name,
+        first_name=first_name,
+        last_name=last_name
         
     )
 
@@ -155,11 +136,11 @@ def login_user():
         if not user or not bcrypt.check_password_hash(user.password_hash, password):
             return jsonify({'error': 'Invalid email or password.'}), 401
         
-        exiration_time = datetime.now() + timedelta(hours=24)
+        expiration_time = datetime.now() + timedelta(hours=24)
 
         payload = {
             'user_id': user.id,
-            'exp': exiration_time,
+            'exp': expiration_time,
         }
         token = jwt.encode(payload, os.getenv('JWT_SECRET'), algorithm='HS256')
         return jsonify({
