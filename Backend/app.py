@@ -10,7 +10,7 @@ from flask import g
 from sqlalchemy import desc
 from sqlalchemy.orm import joinedload
 from flask_cors import CORS
-
+from flask_migrate import Migrate
 load_dotenv()
   # Load environment variables from .env file
 app = Flask(__name__)
@@ -40,7 +40,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 from database import db
 db.init_app(app)
 bcrypt = Bcrypt(app)
-
+migrate = Migrate(app, db)
 
 def jwt_required(f):
     @wraps(f)
@@ -76,22 +76,15 @@ def jwt_required(f):
 
 from models import User, Meal, Review, LatePlate, MealAttendance
 
-with app.app_context():
-    try:
-        db.create_all()
-        print("Database tables created successfully.")
-    except Exception as e:
-        print(f"Error creating database tables: {e}")
-
 @app.route('/api/register', methods=['POST'])
 def register_user():
     data = request.get_json()
 
     email = data.get('email')
     password = data.get('password')
-    first_name = data.get('first_name')
-    last_name = data.get('last_name')
-    name = f"{first_name} {last_name}" if first_name and last_name else None
+    first_name = data.get('firstName')
+    last_name = data.get('lastName')
+    name = f"{data.get('firstName')} {data.get('lastName')}"
 
     if not email or not password:
         return jsonify({'error': 'Email and password are required.'}), 400
