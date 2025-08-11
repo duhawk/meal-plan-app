@@ -1,3 +1,4 @@
+import { useNavigate, Link } from "react-router-dom";
 import React, { useState } from 'react';
 
 function Register({ onRegisterSuccess, onSwitchToLogin}){ /*Declare the state variables for this */
@@ -7,43 +8,27 @@ function Register({ onRegisterSuccess, onSwitchToLogin}){ /*Declare the state va
     const [lastName, setLastName] = useState('');
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
-
+    const navigate = useNavigate(); // Hook to programmatically navigate
+    const [accessCode, setAccessCode] = useState(''); // State variable to hold access code input
     const handleSubmit = async (e) => { /*Will execute when form is submitted. Waits for event to happen*/
         e.preventDefault(); // Prevent page reload 
         setMessage('');
         setError('');
         try {
-            const response = await fetch('http://127.0.0.1:5001/api/register',{ /*Await pauses the execution of handleSubmit until fetch request returns url*/
+            const data = await api('/api/register', {
                 method: 'POST',
-                headers: {
-                    'Content-Type' : 'application/json',
-                },
-                body: JSON.stringify({ //sending the data as JSON
-                    email,
-                    password,
-                    firstName,
-                    lastName
-                }),
+                body: JSON.stringify({ email, password, firstName, lastName, access_code: accessCode || undefined }),
             });
-            const data = await response.json(); // parse the JSON response from backend
 
-            if (response.ok){ // Check if the HTTP status is 201
-                setMessage(data.message); //
+            if (data?.message) { // Check if the HTTP status is 201
+                setMessage(data.message);
                 setEmail('');
                 setPassword('');
                 setFirstName('');
                 setLastName('');
 
-                
-                if (onRegisterSuccess){
-                    onRegisterSuccess(data.message);
-                    onSwitchToLogin();
-                }
-             } else {
-                    setError(data.error || 'Registration failed. Please try again.');
-                }
-            
-        
+                navigate('/login'); // Redirect to login page after successful registration
+            }
         }
         catch (err) {
             console.error('Error during registration:', err);

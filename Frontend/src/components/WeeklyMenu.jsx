@@ -1,172 +1,55 @@
 import React, { useState, useEffect } from 'react';
-import MealReview from './MealReview';
+import { api } from "../lib/api";
 
-function WeeklyMenu({ token }) {
-    const [meals, setMeals] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [selectedMeal, setSelectedMeal] = useState(null);
-    
+export default function WeeklyMenu() {
+  const [meals, setMeals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
 
-    useEffect(() => {
-        const fetchMenu = async () => {
-            setLoading(true);
-            setError('');
-            try {
-                const response = await fetch('http://127.0.0.1:5001/api/menu', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`, // Include the token in the request headers
-                    },
-                });
+  useEffect(() => {
+    (async () => {
+      setLoading(true); setErr("");
+      try {
+        const data = await api("/api/menu");
+        setMeals(Array.isArray(data?.meals) ? data.meals : []);
+      } catch (e) {
+        setErr(e.message || "Failed to load menu.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
-                const data = await response.json();
+  if (loading) return <div className="text-center py-10 text-gray-500">Loading menu…</div>;
+  if (err) return <div className="text-center py-10 text-red-600">{err}</div>;
+  if (!meals.length) return <div className="text-center py-10 text-gray-500">No meals scheduled.</div>;
 
-                if (response.ok) {
-                    const sortedMeals = data.meals.sort((a, b) => {
-                        const dateA = new Date(a.meal_date)
-                        const dateB = new Date(b.meal_date);
-                        if (dateA - dateB !== 0) {
-                            return dateA - dateB; // Sort by meal_date
-                        }
-                        else {
-                            const mealTypeOrder = {'Lunch': 1, 'Dinner': 2};
-                            return mealTypeOrder[a.meal_type] - mealTypeOrder[b.meal_type]; // Sort by meal_type
-                        }
-                        
-                    });
-                    setMeals(sortedMeals);
-                }
-                else {
-                    setError(data.error || 'Failed to fetch menu. Please try again.');
-                }
-            }
-            catch (e) {
-                console.error('Error fetching menu:', e);
-                setError('Could not connect to the server. Please try again later.');
-            }
-            finally {
-                setLoading(false);
-            }
-        };
-
-        if (token) { //if user is logged in fetch the menu
-            fetchMenu();
-        }
-    }, [token]); // Re-run the effect if the token changes
-
-    if (loading) return <p>Loading menu...</p>;
-    if (error) return <p style={{ color: 'red' }}>Error: {error}</p>;
-    if (meals.length === 0) return <p>No meals available for this week.</p>;
-
-    const mealsByDate = meals.reduce((acc, meal) => {
-    const dateKey = new Date(meal.meal_date).toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-    });
-    if (!acc[dateKey]) acc[dateKey] = [];
-    acc[dateKey].push(meal);
-    return acc;
-}, {});
-
-const handleReviewSubmit = async (reviewData) => {
-    try {
-        const response = await fetch(`http://localhost:5001/api/meals/${selectedMeal?.id}/reviews`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token || localStorage.getItem('token')}`,
-            },
-            body: JSON.stringify(reviewData),
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to submit review');
-        }
-
-        alert('Review submitted successfully!');
-        setSelectedMeal(null);
-        // Optionally refresh menu or reviews here
-    } catch (err) {
-        console.error('Error submitting review:', err);
-        alert('Failed to submit review. Please try again.');
-    }
-};
-
-return (
-    <div className="weekly-menu">
-        <h2>Weekly Menu</h2>
-        {Object.entries(mealsByDate).map(([date, dayMeals]) => (
-            <div key={date} className='daily-menu-section card' style={{ marginBottom: '20px' }}>
-                <h3>{date}</h3>
-                {dayMeals.map((meal) => (
-                    <div
-                        key={meal.id}
-                        className="meal-item"
-                        style={{
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '8px',
-                            padding: '16px',
-                            marginBottom: '12px',
-                            backgroundColor: '#fff',
-                        }}
-                    >
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <div>
-                                <h4 style={{ margin: '0 0 4px 0' }}>{meal.dish_name}</h4>
-                                <p style={{ margin: '0 0 8px 0', color: '#666' }}>{meal.meal_type}</p>
-                            </div>
-                            {meal.image_url && (
-                                <img
-                                    src={meal.image_url}
-                                    alt={meal.dish_name}
-                                    style={{
-                                        width: '64px',
-                                        height: '64px',
-                                        borderRadius: '8px',
-                                        objectFit: 'cover',
-                                    }}
-                                />
-                            )}
-                        </div>
-
-                        <p style={{ margin: '8px 0' }}>{meal.description}</p>
-
-                        {selectedMeal?.id === meal.id ? (
-                            <MealReview
-                                MealId={meal.id}
-                                onReviewSubmit={handleReviewSubmit}
-                                onCancel={() => setSelectedMeal(null)}
-                            />
-                        ) : (
-                            <button
-                                onClick={() => setSelectedMeal(meal)}
-                                style={{
-                                    marginTop: '10px',
-                                    padding: '8px 16px',
-                                    backgroundColor: '#4CAF50',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                }}
-                            >
-                                Leave a Review
-                            </button>
-                        )}
-                    </div>
-                ))}
+  return (
+    <div className="space-y-4">
+      {meals.map((m) => (
+        <div key={m.id} className="rounded-2xl border bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm text-gray-500">{new Date(m.meal_date).toLocaleString()}</div>
+              <div className="text-lg font-semibold">{m.dish_name || m.meal_type}</div>
+              {m.description && <div className="text-gray-600 mt-1 text-sm">{m.description}</div>}
             </div>
-        ))}
+            {m.image_url && (
+              <img src={m.image_url} alt="" className="w-20 h-20 object-cover rounded-xl border" />
+            )}
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <button className="rounded-xl border py-2 hover:bg-gray-50">Review</button>
+            <button className="rounded-xl border py-2 hover:bg-gray-50">Late Plate</button>
+            <button className="rounded-xl border py-2 hover:bg-gray-50">I’m Attending</button>
+          </div>
+        </div>
+      ))}
     </div>
-);
+  );
+}
 
-
-};
-export default WeeklyMenu;
 
 
     
