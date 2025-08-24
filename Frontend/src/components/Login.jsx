@@ -47,17 +47,17 @@ return (
     <form onSubmit={handleSubmit} className="mt-6 space-y-4">
       <div>
         <label className="block text-sm font-medium">Email</label>
-        <input className="mt-1 w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-300"
+        <input className="mt-1 w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-white-300 bg-white text-black"
                type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required />
       </div>
       <div>
         <label className="block text-sm font-medium">Password</label>
-        <input className="mt-1 w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-300"
+        <input className="mt-1 w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-white-300 bg-white text-black"
                type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required />
       </div>
       <div>
         <label className="block text-sm font-medium">Access Code (optional for now)</label>
-        <input className="mt-1 w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-gray-300"
+        <input className="mt-1 w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-white-300 bg-white text-black"
                placeholder="e.g. BETA-OMEGA-2025" value={accessCode} onChange={(e)=>setAccessCode(e.target.value)} />
         <p className="text-xs text-gray-500 mt-1">Used to associate you with a fraternity chapter.</p>
       </div>

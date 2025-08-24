@@ -90,9 +90,9 @@ function Register({ onRegisterSuccess, onSwitchToLogin}){ /*Declare the state va
             </form>
             <p>
                 Already have an account?{' '}
-                <span className="link-text" onClick={onSwitchToLogin} style={{ background: 'none', border: 'none', color: '#646cff', cursor: 'pointer', padding: 0}}>
+                <Link to="/login" className="px-5 py-3 rounded-xl border text-sm hover:bg-gray-100">
                     Login here {/*This button will switch to the login form*/}  
-                </span>
+                </Link>
             </p>
         </div>
         );
