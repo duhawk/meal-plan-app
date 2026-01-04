@@ -419,20 +419,90 @@ def get_meal_attendance(meal_id):
         print(f"Error fetching meal attendance: {e}")
         return jsonify({'error': 'Failed to fetch meal attendance.'}), 500
     
-@app.route('/api/meals/<int:meal_id>', methods=['PUT'])
-@admin_required
-def update_meal(meal_id):
-    data = request.get_json()
+@app.route('/api/meals/<int:meal_id>', methods=['GET'])
+@jwt_required
+def get_meal(meal_id):
     try:
         meal = Meal.query.get(meal_id)
         if not meal:
             return jsonify({'error': 'Meal not found.'}), 404
         
-        meal.meal_date = datetime.fromisoformat(data.get('meal_date', meal.meal_date.isoformat()))
-        meal.meal_type = data.get('meal_type', meal.meal_type)
-        meal.dish_name = data.get('dish_name', meal.dish_name)
-        meal.description = data.get('description', meal.description)
-        meal.image_url = data.get('image_url', meal.image_url)
+        return jsonify({
+            'id': meal.id,
+            'meal_date': meal.meal_date.isoformat(),
+            'meal_type': meal.meal_type,
+            'dish_name': meal.dish_name,
+            'description': meal.description,
+            'image_url': meal.image_url,
+        }), 200
+    except Exception as e:
+        print(f"Error fetching meal {meal_id}: {e}")
+        return jsonify({'error': 'Failed to fetch meal.'}), 500
+
+@app.route('/api/admin/meals/<int:meal_id>/attendance-details', methods=['GET'])
+@admin_required
+def get_meal_attendance_details(meal_id):
+    try:
+        meal = Meal.query.get(meal_id)
+        if not meal:
+            return jsonify({'error': 'Meal not found.'}), 404
+
+        all_users = User.query.all()
+        attending_user_ids = {ma.user_id for ma in MealAttendance.query.filter_by(meal_id=meal_id).all()}
+
+        attending_users = []
+        not_attending_users = []
+
+        for user in all_users:
+            user_data = {
+                'id': user.id,
+                'name': user.name,
+                'email': user.email,
+            }
+            if user.id in attending_user_ids:
+                attending_users.append(user_data)
+            else:
+                not_attending_users.append(user_data)
+        
+        return jsonify({
+            'meal': {
+                'id': meal.id,
+                'dish_name': meal.dish_name,
+                'meal_date': meal.meal_date.isoformat(),
+                'meal_type': meal.meal_type,
+                'image_url': meal.image_url,
+            },
+            'attending_users': attending_users,
+            'not_attending_users': not_attending_users,
+            'attending_count': len(attending_users),
+            'not_attending_count': len(not_attending_users),
+            'total_users': len(all_users),
+        }), 200
+    except Exception as e:
+        print(f"Error fetching meal attendance details for meal {meal_id}: {e}")
+        return jsonify({'error': 'Failed to fetch attendance details.'}), 500
+
+@app.route('/api/meals/<int:meal_id>', methods=['PUT'])
+@admin_required
+def update_meal(meal_id):
+    try:
+        meal = Meal.query.get(meal_id)
+        if not meal:
+            return jsonify({'error': 'Meal not found.'}), 404
+        
+        image_url = request.form.get('image_url')
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and file.filename != '' and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                image_url = f"/uploads/{filename}"
+
+        meal.meal_date = datetime.fromisoformat(request.form.get('meal_date', meal.meal_date.isoformat()))
+        meal.meal_type = request.form.get('meal_type', meal.meal_type)
+        meal.dish_name = request.form.get('dish_name', meal.dish_name)
+        meal.description = request.form.get('description', meal.description)
+        meal.image_url = image_url
         
         db.session.commit()
         return jsonify({'message': 'Meal updated successfully.'}), 200
@@ -520,38 +590,97 @@ def get_all_users():
 @admin_required
 def add_bulk_meals():
     try:
-        meals_data = request.get_json()
+        print("--- Bulk Meal Request Received ---")
+        print("Request form data:", request.form)
+        
+        meals_json = request.form.get('meals')
+        if not meals_json:
+            print("Error: 'meals' data not in form.")
+            return jsonify({'error': 'Missing meals data in form.'}), 400
+        
+        print("Meals JSON string:", meals_json)
+        meals_data = json.loads(meals_json)
+        
         if not isinstance(meals_data, list):
-            return jsonify({'error': 'Request body must be a list of meal objects.'}), 400
+            print("Error: Parsed meals data is not a list.")
+            return jsonify({'error': 'Meals data must be a list.'}), 400
 
+        print(f"Processing {len(meals_data)} meals.")
         new_meals = []
-        for meal_data in meals_data:
+        for i, meal_data in enumerate(meals_data):
+            print(f"Processing meal {i+1}: {meal_data}")
+            
+            image_url = meal_data.get('image_url')
+            file_key = f"image-{meal_data['id']}"
+            
+            if file_key in request.files:
+                file = request.files[file_key]
+                print(f"Found file for {file_key}: {file.filename}")
+                if file and file.filename != '' and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    image_url = f"/uploads/{filename}"
+                    print(f"Saved file as {filename}, URL: {image_url}")
+
             meal_date_obj = datetime.fromisoformat(meal_data['meal_date'])
+            
             new_meal = Meal(
                 meal_date=meal_date_obj,
                 meal_type=meal_data['meal_type'],
                 dish_name=meal_data['dish_name'],
                 description=meal_data.get('description'),
-                image_url=None # No image handling in this version
+                image_url=image_url
             )
             db.session.add(new_meal)
             new_meals.append(new_meal)
         
+        print("Flushing to get meal IDs...")
         db.session.flush()
 
+        print("Adding attendance records for all users...")
         all_users = User.query.all()
         for meal in new_meals:
             for user in all_users:
                 new_attendance = MealAttendance(meal_id=meal.id, user_id=user.id)
                 db.session.add(new_attendance)
 
+        print("Committing transaction...")
         db.session.commit()
+        print("--- Bulk Meal Request Successful ---")
         return jsonify({'message': f'{len(new_meals)} meals added successfully.'}), 201
 
     except Exception as e:
         db.session.rollback()
+        print(f"--- Error in add_bulk_meals ---")
+        print(f"Exception type: {type(e)}")
+        print(f"Exception args: {e.args}")
         print(f"Error adding bulk meals: {e}")
         return jsonify({'error': 'Failed to add bulk meals.'}), 500
+
+@app.route('/api/meals/search', methods=['GET'])
+@admin_required
+def search_meals():
+    try:
+        query = request.args.get('q', '')
+        if not query or len(query) < 2:
+            return jsonify({'meals': []}), 200
+
+        past_meals = db.session.query(Meal).filter(
+            Meal.dish_name.ilike(f'%{query}%'),
+            Meal.image_url.isnot(None)
+        ).distinct(Meal.dish_name).order_by(Meal.dish_name, Meal.meal_date.desc()).limit(10).all()
+
+        meals_data = [{
+            'dish_name': meal.dish_name,
+            'description': meal.description,
+            'image_url': meal.image_url,
+        } for meal in past_meals]
+        
+        return jsonify({'meals': meals_data}), 200
+
+    except Exception as e:
+        print(f"Error searching meals: {e}")
+        return jsonify({'error': 'Failed to search meals.'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

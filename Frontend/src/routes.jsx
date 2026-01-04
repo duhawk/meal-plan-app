@@ -22,6 +22,8 @@ import AdminMeals from "./pages/admin/AdminMeals";
 import AdminReviews from "./pages/admin/AdminReviews.jsx";
 import AdminAttendance from "./pages/admin/AdminAttendance.jsx";
 import AdminUsers from "./pages/admin/AdminUsers.jsx";
+import EditMeal from "./pages/admin/EditMeal.jsx";
+import MealAttendanceDetails from "./pages/admin/MealAttendanceDetails.jsx";
 
 function isAuthed() { return Boolean(localStorage.getItem("token")); }
 
@@ -68,6 +70,8 @@ const router = createBrowserRouter([
           { path: "reviews", element: <AdminReviews /> },
           { path: "attendance", element: <AdminAttendance /> },
           { path: "users", element: <AdminUsers /> },
+          { path: "edit-meal/:mealId", element: <EditMeal /> },
+          { path: "attendance/:mealId", element: <MealAttendanceDetails /> },
         ],
       },
     ],

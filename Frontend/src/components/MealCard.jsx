@@ -1,7 +1,7 @@
 
 import { Calendar, Star, CheckCircle, Users } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
-
+import { Link } from 'react-router-dom';
 import { BASE_URL } from '../lib/api';
 import Button from './ui/Button';
 
@@ -37,7 +37,7 @@ export default function MealCard({ meal, onAttend, onReview, onLatePlate }) {
         <h3 className="text-xl font-bold text-text-primary dark:text-white">{meal.dish_name}</h3>
         <p className="text-text-secondary mt-1 dark:text-gray-300">{meal.description}</p>
         
-        <div className="mt-6 flex flex-col sm:flex-row gap-3">
+        <div className="mt-6 flex flex-wrap gap-3">
           <Button 
             onClick={onAttend} 
             disabled={isPast} 
@@ -54,6 +54,11 @@ export default function MealCard({ meal, onAttend, onReview, onLatePlate }) {
           <Button onClick={onLatePlate} variant="secondary" className="w-full sm:w-auto">
             Late Plate
           </Button>
+          {user?.is_admin && (
+            <Link to={`/app/admin/edit-meal/${meal.id}`}>
+              <Button variant="secondary" className="w-full sm:w-auto">Edit</Button>
+            </Link>
+          )}
         </div>
       </div>
     </div>
