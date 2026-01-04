@@ -9,6 +9,7 @@ class User(db.Model):
     name = db.Column(db.String(150), nullable = False)
     first_name = db.Column(db.String(75), nullable=False)
     last_name = db.Column(db.String(75), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=db.func.current_timestamp())
     """ fraternity_id = db.Column(db.Integer, db.ForeignKey('fraternities.id'), nullable=False)
  """

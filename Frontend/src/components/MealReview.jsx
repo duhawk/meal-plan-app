@@ -1,17 +1,37 @@
 import React, { useState } from 'react';
+import Button from './ui/Button';
 
-const MealReview = ({ MealId, onReviewSubmit, onCancel }) => {
+const Star = ({ active, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`text-3xl px-0.5 transition-colors ${active ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-300'}`}
+    aria-label={active ? 'selected' : 'unselected'}
+  >
+    {'★'}
+  </button>
+);
+
+const MealReview = ({ onReviewSubmit, onCancel }) => {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (rating === 0) {
+      alert('Please select a rating.');
+      return;
+    }
+    setSubmitting(true);
     try {
       await onReviewSubmit({ rating, comment });
       setRating(0);
       setComment('');
     } catch (err) {
       console.error('Error submitting review:', err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -19,84 +39,37 @@ const MealReview = ({ MealId, onReviewSubmit, onCancel }) => {
     e.preventDefault();
     setRating(0);
     setComment('');
-    if (onCancel) onCancel();
+    onCancel?.();
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginTop: '12px' }}>
-      <div style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', marginBottom: '8px' }}>Rating:</label>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div>
+        <label className="block text-sm font-medium mb-2 text-text-secondary">Rating</label>
+        <div className="flex items-center">
           {[1, 2, 3, 4, 5].map((star) => (
-            <button
-              key={star}
-              type="button"
-              onClick={() => setRating(star)}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '24px',
-                padding: '8px',
-                cursor: 'pointer',
-                color: star <= rating ? '#ffd700' : '#ddd',
-              }}
-            >
-              {star <= rating ? '★' : '☆'}
-            </button>
+            <Star key={star} active={star <= rating} onClick={() => setRating(star)} />
           ))}
         </div>
       </div>
 
-      <div style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', marginBottom: '8px' }}>Comment:</label>
+      <div>
+        <label htmlFor="comment" className="block text-sm font-medium mb-2 text-text-secondary">Comment</label>
         <textarea
+          id="comment"
+          className="input mt-1 w-full bg-white/90 border-gray-300 rounded-lg text-text-primary"
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          style={{
-            backgroundColor: 'white',
-            color: 'black',
-            width: '100%',
-            padding: '12px',
-            border: '1px solid #ddd',
-            borderRadius: '8px',
-            minHeight: '100px',
-            fontSize: '16px',
-          }}
           placeholder="Share your thoughts..."
-          required
+          rows="4"
         />
       </div>
 
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button
-          type="submit"
-          style={{
-            flex: 1,
-            backgroundColor: '#4CAF50',
-            color: 'white',
-            padding: '12px',
-            borderRadius: '8px',
-            border: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          Submit Review
-        </button>
-        <button
-          type="button"
-          onClick={handleCancel}
-          style={{
-            flex: 1,
-            backgroundColor: 'red',
-            padding: '10px',
-            borderRadius: '10px',
-            border: 'none',
-            color: 'white',
-            cursor: 'pointer',
-          }}
-        >
-          Cancel
-        </button>
+      <div className="flex gap-3 pt-2">
+        <Button type="submit" disabled={submitting} className="w-full">
+          {submitting ? 'Submitting…' : 'Submit Review'}
+        </Button>
+        <Button type="button" variant="secondary" onClick={handleCancel} className="w-full">Cancel</Button>
       </div>
     </form>
   );

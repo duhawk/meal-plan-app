@@ -1,106 +1,84 @@
 import { useNavigate, Link } from "react-router-dom";
 import React, { useState } from 'react';
+import { api } from "../lib/api";
+import Button from './ui/Button';
 
-function Register({ onRegisterSuccess, onSwitchToLogin}){ /*Declare the state variables for this */
-    const [email, setEmail] = useState('');  /*Hold state values which can contain the values users put*/
+function Register({ onRegisterSuccess, onSwitchToLogin }){
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
-    const navigate = useNavigate(); // Hook to programmatically navigate
-    const [accessCode, setAccessCode] = useState(''); // State variable to hold access code input
-    const handleSubmit = async (e) => { /*Will execute when form is submitted. Waits for event to happen*/
-        e.preventDefault(); // Prevent page reload 
+    const navigate = useNavigate();
+    const [accessCode, setAccessCode] = useState('');
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
         setMessage('');
         setError('');
         try {
             const data = await api('/api/register', {
                 method: 'POST',
-                body: JSON.stringify({ email, password, firstName, lastName, access_code: accessCode || undefined }),
+                body: { email, password, firstName, lastName, access_code: accessCode || undefined },
             });
 
-            if (data?.message) { // Check if the HTTP status is 201
+            if (data?.message) {
                 setMessage(data.message);
-                setEmail('');
-                setPassword('');
-                setFirstName('');
-                setLastName('');
-
-                navigate('/login'); // Redirect to login page after successful registration
+                setTimeout(() => navigate('/login'), 2000);
             }
         }
         catch (err) {
             console.error('Error during registration:', err);
-            setError('Could not connect to the server. Please try again later.');
+            setError(err.message || 'Could not connect to the server. Please try again later.');
+        }
     }
-    }
-    // /*Links label to input field
+
     return (
-        <div className="card">
-            <h2>Register</h2>
-            {message && <p style={{ color: 'green'}}>{message}</p>}
-            {error && <p style={{ color: 'red'}}>{error}</p>}
-            <form onSubmit={handleSubmit}>
-                <div>
-                    <label htmlFor="email">Email:</label> 
-                    <input
-                        type="email"
-                        style={{ backgroundColor: 'white', color: 'black'}}
-                        id="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        />
-                </div>
-                <div>
-                    <label htmlFor="password">Password:</label>
-                    <input
-                        type="password"
-                        style={{ backgroundColor: 'white', color: 'black'}}
-                        id="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        />
-                </div>
-                <div>
-                    <label htmlFor="firstName">First Name:</label>
-                    <input
-                        type="text"
-                        style={{ backgroundColor: 'white', color: 'black'}}
-                        id="firstName"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        required
-                        />
-                </div>
-                <div>
-                    <label htmlFor="lastName">Last Name:</label>
-                    <input
-                        type="text"
-                        style={{ backgroundColor: 'white', color: 'black'}}
-                        id="lastName"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        required
-                        />
-                </div>
-                <button type="submit">Register</button>
-            </form>
-            <p>
-                Already have an account?{' '}
-                <Link to="/login" className="px-5 py-3 rounded-xl border text-sm hover:bg-gray-100">
-                    Login here {/*This button will switch to the login form*/}  
-                </Link>
-            </p>
+      <div className="min-h-screen grid place-items-center px-4 py-8">
+        <div className="w-full max-w-md p-8 space-y-6 bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 shadow-lg">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-text-primary">Create your account</h2>
+            <p className="text-text-secondary mt-2">Join Fraternity Meals to start planning.</p>
+          </div>
+
+          {message && <p className="text-green-600 text-sm text-center">{message}</p>}
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="w-full">
+                <label htmlFor="firstName" className="block text-sm font-medium text-text-secondary">First Name</label>
+                <input id="firstName" type="text" value={firstName} onChange={(e)=>setFirstName(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary" autoComplete="given-name" />
+              </div>
+              <div className="w-full">
+                <label htmlFor="lastName" className="block text-sm font-medium text-text-secondary">Last Name</label>
+                <input id="lastName" type="text" value={lastName} onChange={(e)=>setLastName(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary" autoComplete="family-name" />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-text-secondary">Email</label>
+              <input id="email" type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary" autoComplete="email" />
+            </div>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-text-secondary">Password</label>
+              <input id="password" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary" autoComplete="new-password" />
+            </div>
+            <Button type="submit" className="w-full">Create Account</Button>
+            <div className="text-sm text-center text-text-secondary">
+              <Link to="/" className="font-medium text-primary hover:underline">
+                Back to Home
+              </Link>
+              <span className="mx-2">|</span>
+              Already have an account?{' '}
+              <Link to="/login" className="font-medium text-primary hover:underline">
+                Sign in
+              </Link>
+            </div>
+          </form>
         </div>
-        );
+      </div>
+    );
+}
     
-    }
-    
-    export default Register;
-
-    
-
-
+export default Register;
