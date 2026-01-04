@@ -4,6 +4,7 @@ import Modal from "./Modal";
 import MealReview from "./MealReview";
 import MealCard from "./MealCard";
 import Button from './ui/Button';
+import { useUser } from '../contexts/UserContext';
 
 export default function WeeklyMenu() {
   const [meals, setMeals] = useState([]);
@@ -14,6 +15,7 @@ export default function WeeklyMenu() {
   const [showReview, setShowReview] = useState(false);
   const [showLatePlate, setShowLatePlate] = useState(false);
   const [lateNotes, setLateNotes] = useState("");
+  const { user } = useUser();
 
   useEffect(() => {
     (async () => {
@@ -27,7 +29,7 @@ export default function WeeklyMenu() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [user]); // Re-fetch when user context changes (e.g., login/logout)
 
   const renderSkeleton = () => (
     <div className="bg-surface/50 backdrop-blur-lg rounded-xl border border-border-light/50 p-6 animate-pulse">
@@ -46,8 +48,8 @@ export default function WeeklyMenu() {
     return (
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-text-primary">Weekly Menu</h1>
-          <p className="text-text-secondary mt-1">See what’s scheduled and take action.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-white">Weekly Menu</h1>
+          <p className="text-text-secondary mt-1 dark:text-gray-400">See what’s scheduled and take action.</p>
         </div>
         <div className="space-y-6">
           {[1, 2, 3].map(i => renderSkeleton())}
@@ -56,7 +58,7 @@ export default function WeeklyMenu() {
     );
   }
   if (err) return <div className="text-center py-10 text-red-600">{err}</div>;
-  if (!meals.length) return <div className="text-center py-10 text-text-secondary">No meals scheduled for this week.</div>;
+  if (!meals.length) return <div className="text-center py-10 text-text-secondary dark:text-gray-400">No upcoming meals scheduled.</div>;
 
   return (
     <div className="space-y-8">

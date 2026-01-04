@@ -77,6 +77,11 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill }) => {
                     className="px-3 py-2 text-sm text-text-primary dark:text-white hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer"
                   >
                     {result.dish_name}
+                    {result.past_dates && result.past_dates.length > 0 && (
+                      <span className="ml-2 text-xs text-text-secondary dark:text-gray-400">
+                        (Also on: {result.past_dates.map(d => new Date(d).toLocaleDateString()).join(', ')})
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

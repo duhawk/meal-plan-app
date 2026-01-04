@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import jwt
 from functools import wraps
 from flask import g
-from sqlalchemy import desc
+from sqlalchemy import desc, func, and_
 from sqlalchemy.orm import joinedload
 from flask_cors import CORS
 from flask_migrate import Migrate
@@ -89,8 +89,17 @@ def admin_required(f):
     @wraps(f)
     @jwt_required
     def decorated(*args, **kwargs):
-        if not g.current_user.is_admin:
-            return jsonify({'message': 'Admins only!'}), 403
+        if not (g.current_user.is_admin or g.current_user.is_owner):
+            return jsonify({'message': 'Admins or Owners only!'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+def owner_required(f):
+    @wraps(f)
+    @jwt_required
+    def decorated(*args, **kwargs):
+        if not g.current_user.is_owner:
+            return jsonify({'message': 'Owners only!'}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -158,7 +167,7 @@ def login_user():
     return jsonify({
         'message': 'Login successful',
         'token': token,
-        'user': { 'id': user.id, 'email': user.email, 'name': user.name, 'is_admin': user.is_admin }
+        'user': { 'id': user.id, 'email': user.email, 'name': user.name, 'is_admin': user.is_admin, 'is_owner': user.is_owner }
     }), 200
 
 @app.route('/api/me', methods=['GET'])
@@ -176,23 +185,37 @@ def get_me():
 @jwt_required
 def get_weekly_menu():
     try:
+        print("--- Get Weekly Menu Request ---")
         user_id = g.current_user.id
+        print(f"Current User ID: {user_id}")
         
-        # Subquery to count attendance for each meal
         attendance_subquery = db.session.query(
             MealAttendance.meal_id,
-            db.func.count(MealAttendance.id).label('attendance_count')
+            func.count(MealAttendance.id).label('attendance_count')
         ).group_by(MealAttendance.meal_id).subquery()
 
-        # Get all attendance records for the current user to avoid N+1 queries
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Calculate the start and end of the current week (Sunday to Saturday)
+        # Assuming today is a datetime object
+        start_of_week = today - timedelta(days=today.weekday() + 1) # Monday is 0, Sunday is 6. So Sunday is today.weekday() + 1 days ago
+        if today.weekday() == 6: # If today is Sunday
+            start_of_week = today
+        
+        end_of_week = start_of_week + timedelta(days=6)
+        end_of_week = end_of_week.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        print(f"Current week: {start_of_week.date()} to {end_of_week.date()}")
+
         user_attendance = {ma.meal_id for ma in MealAttendance.query.filter_by(user_id=user_id).all()}
+        print(f"User {user_id} attending meals: {user_attendance}")
 
         meals = db.session.query(
             Meal,
             attendance_subquery.c.attendance_count
         ).outerjoin(
             attendance_subquery, Meal.id == attendance_subquery.c.meal_id
-        ).order_by(Meal.meal_date).all()
+        ).filter(Meal.meal_date >= start_of_week, Meal.meal_date <= end_of_week).order_by(Meal.meal_date).all()
 
         meals_data = []
         for meal, attendance_count in meals:
@@ -206,10 +229,77 @@ def get_weekly_menu():
                 'is_attending': meal.id in user_attendance,
                 'attendance_count': attendance_count or 0,
             })
+        print(f"Returning {len(meals_data)} upcoming meals for the current week.")
         return jsonify({'meals': meals_data}), 200
     except Exception as e:
+        print(f"--- Error in get_weekly_menu ---")
+        print(f"Exception type: {type(e)}")
+        print(f"Exception args: {e.args}")
         print(f"Error fetching meals: {e}")
         return jsonify({'error': 'Failed to fetch meals.'}), 500
+
+@app.route('/api/past-meals', methods=['GET'])
+@jwt_required
+def get_past_meals():
+    try:
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Calculate the start of the current week (Sunday)
+        start_of_week = today - timedelta(days=today.weekday() + 1)
+        if today.weekday() == 6: # If today is Sunday
+            start_of_week = today
+
+        # Subquery to get all attendance counts for each meal instance
+        meal_instance_attendance_subquery = db.session.query(
+            MealAttendance.meal_id,
+            func.count(MealAttendance.id).label('instance_attendance_count')
+        ).group_by(MealAttendance.meal_id).subquery()
+
+        # Subquery to get all meal instances with their attendance counts
+        all_meal_instances_subquery = db.session.query(
+            Meal.id,
+            Meal.dish_name,
+            Meal.meal_date,
+            Meal.description,
+            Meal.image_url,
+            func.coalesce(meal_instance_attendance_subquery.c.instance_attendance_count, 0).label('attendance_for_date')
+        ).outerjoin(
+            meal_instance_attendance_subquery, Meal.id == meal_instance_attendance_subquery.c.meal_id
+        ).filter(Meal.meal_date < start_of_week).subquery() # Filter for previous week cycles
+
+        # Main query to group by dish_name and aggregate data
+        grouped_meals_data = db.session.query(
+            all_meal_instances_subquery.c.dish_name,
+            func.max(all_meal_instances_subquery.c.description).label('description'),
+            func.max(all_meal_instances_subquery.c.image_url).label('image_url'),
+            func.avg(all_meal_instances_subquery.c.attendance_for_date).label('average_attendance'),
+            func.array_agg(
+                func.jsonb_build_object(
+                    'date', all_meal_instances_subquery.c.meal_date,
+                    'attendance', all_meal_instances_subquery.c.attendance_for_date
+                )
+            ).label('all_occurrences')
+        ).group_by(all_meal_instances_subquery.c.dish_name) \
+        .order_by(all_meal_instances_subquery.c.dish_name) \
+        .all()
+
+        meals_data = []
+        for dish_name, description, image_url, average_attendance, all_occurrences in grouped_meals_data:
+            meals_data.append({
+                'dish_name': dish_name,
+                'description': description,
+                'image_url': image_url,
+                'average_attendance': round(average_attendance, 2) if average_attendance else 0,
+                'past_occurrences': sorted([
+                    {'date': datetime.fromisoformat(occ['date']), 'attendance': occ['attendance']}
+                    for occ in all_occurrences
+                ], key=lambda x: x['date'], reverse=True),
+            })
+        return jsonify({'meals': meals_data}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error fetching past meals: {e}")
+        return jsonify({'error': 'Failed to fetch past meals.'}), 500
         
 @app.route('/api/meals', methods=['POST'])
 @admin_required
@@ -579,12 +669,60 @@ def get_all_users():
             'name': user.name,
             'email': user.email,
             'is_admin': user.is_admin,
+            'is_owner': user.is_owner,
             'created_at': user.created_at.isoformat(),
         } for user in users]
         return jsonify({'users': users_data}), 200
     except Exception as e:
         print(f"Error fetching users: {e}")
         return jsonify({'error': 'Failed to fetch users.'}), 500
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@owner_required
+def delete_user(user_id):
+    try:
+        user_to_delete = User.query.get(user_id)
+        if not user_to_delete:
+            return jsonify({'error': 'User not found.'}), 404
+        
+        if user_to_delete.is_owner:
+            return jsonify({'error': 'Cannot delete an owner.'}), 403
+
+        db.session.delete(user_to_delete)
+        db.session.commit()
+        return jsonify({'message': 'User deleted successfully.'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting user {user_id}: {e}")
+        return jsonify({'error': 'Failed to delete user.'}), 500
+
+@app.route('/api/admin/users/<int:user_id>/role', methods=['PUT'])
+@owner_required
+def update_user_role(user_id):
+    try:
+        user_to_update = User.query.get(user_id)
+        if not user_to_update:
+            return jsonify({'error': 'User not found.'}), 404
+        
+        data = request.get_json()
+        is_admin = data.get('is_admin')
+
+        if is_admin is None:
+            return jsonify({'error': 'is_admin status is required.'}), 400
+        
+        if user_to_update.is_owner and is_admin is False:
+            return jsonify({'error': 'Cannot demote an owner from admin status.'}), 403
+
+        user_to_update.is_admin = is_admin
+        db.session.commit()
+        return jsonify({'message': 'User role updated successfully.'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating user role for user {user_id}: {e}")
+        return jsonify({'error': 'Failed to update user role.'}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5001)
 
 @app.route('/api/meals/bulk', methods=['POST'])
 @admin_required
@@ -665,16 +803,40 @@ def search_meals():
         if not query or len(query) < 2:
             return jsonify({'meals': []}), 200
 
-        past_meals = db.session.query(Meal).filter(
+        # Subquery to get all dates for each dish_name
+        dates_subquery = db.session.query(
+            Meal.dish_name,
+            db.func.array_agg(Meal.meal_date).label('all_dates')
+        ).filter(
+            Meal.dish_name.ilike(f'%{query}%'),
+            Meal.image_url.isnot(None) # Only consider meals with images
+        ).group_by(Meal.dish_name).subquery()
+
+        # Main query to get the most recent meal for each dish_name
+        # and join with the dates subquery
+        sub = db.session.query(
+            Meal.dish_name,
+            db.func.max(Meal.meal_date).label('max_meal_date')
+        ).filter(
             Meal.dish_name.ilike(f'%{query}%'),
             Meal.image_url.isnot(None)
-        ).distinct(Meal.dish_name).order_by(Meal.dish_name, Meal.meal_date.desc()).limit(10).all()
+        ).group_by(Meal.dish_name).subquery()
 
-        meals_data = [{
-            'dish_name': meal.dish_name,
-            'description': meal.description,
-            'image_url': meal.image_url,
-        } for meal in past_meals]
+        past_meals = db.session.query(Meal, dates_subquery.c.all_dates).join(
+            sub,
+            sa.and_(Meal.dish_name == sub.c.dish_name, Meal.meal_date == sub.c.max_meal_date)
+        ).join(
+            dates_subquery, Meal.dish_name == dates_subquery.c.dish_name
+        ).order_by(Meal.dish_name).limit(10).all()
+
+        meals_data = []
+        for meal, all_dates in past_meals:
+            meals_data.append({
+                'dish_name': meal.dish_name,
+                'description': meal.description,
+                'image_url': meal.image_url,
+                'past_dates': sorted([d.isoformat() for d in all_dates], reverse=True)
+            })
         
         return jsonify({'meals': meals_data}), 200
 
@@ -694,5 +856,17 @@ def make_admin(email):
         user.is_admin = True
         db.session.commit()
         print(f"User {email} has been set as an admin.")
+    else:
+        print(f"User {email} not found.")
+
+@app.cli.command("make-owner")
+@click.argument("email")
+def make_owner(email):
+    """Sets a user as an owner."""
+    user = User.query.filter_by(email=email).first()
+    if user:
+        user.is_owner = True
+        db.session.commit()
+        print(f"User {email} has been set as an owner.")
     else:
         print(f"User {email} not found.")
