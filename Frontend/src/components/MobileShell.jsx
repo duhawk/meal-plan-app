@@ -3,6 +3,7 @@ import Button from "./ui/Button";
 import { Home, Utensils, Calendar, PenSquare, Settings } from 'lucide-react';
 import ThemeToggle from "./ui/ThemeToggle";
 import { useUser } from "../contexts/UserContext";
+import { BASE_URL } from "../lib/api"; // Import BASE_URL
 
 export default function MobileShell() {
   const navigate = useNavigate();
@@ -31,8 +32,8 @@ export default function MobileShell() {
         <div className="mx-auto max-w-screen-sm px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <div className="h-7 w-7 rounded-lg bg-primary ml-2" />
-            <div className="font-bold text-text-primary dark:text-white">Fraternity Meals</div>
+            <img src={`${BASE_URL}/uploads/Logo.png`} alt="Logo" className="h-10 w-10 rounded-full object-cover ml-2" />
+            <div className="font-bold text-text-primary dark:text-white">Brotherhood Bites</div>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-text-secondary dark:text-gray-400">Hi, {safeName}</span>

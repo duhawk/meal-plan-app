@@ -18,7 +18,10 @@ export default {
         'surface': 'rgba(255, 255, 255, 0.7)',
         'gradient-start': '#E6E0FF',
         'gradient-end': '#D4F1F4',
+        'light-bg-start': '#f8fafc',
+        'light-bg-end': '#f1f5f9',
         blue: colors.blue,
+        'dark-blue': '#0D1117',
       },
       fontFamily: {
         sans: ['system-ui', ...defaultTheme.fontFamily.sans],

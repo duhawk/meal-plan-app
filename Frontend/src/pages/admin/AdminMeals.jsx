@@ -167,7 +167,7 @@ export default function AdminMeals() {
 
   const handleAutofillSlot = (id, data) => {
     setMealSlots(currentSlots =>
-      currentSlots.map(slot => slot.id === id ? { ...slot, dish_name: data.dish_name, description: data.description, image_url: data.image_url } : slot)
+      currentSlots.map(slot => slot.id === id ? { ...slot, dish_name: data.dish_name, description: data.description, image_url: data.image_url, meal_type: data.meal_type } : slot)
     );
   };
 

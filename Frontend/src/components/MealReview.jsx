@@ -1,19 +1,26 @@
 import React, { useState } from 'react';
 import Button from './ui/Button';
+import { Star as StarIcon } from 'lucide-react';
 
-const Star = ({ active, onClick }) => (
-  <button
-    type="button"
+const Star = ({ filled, half, onMouseEnter, onMouseLeave, onClick }) => (
+  <div
+    className="relative"
+    onMouseEnter={onMouseEnter}
+    onMouseLeave={onMouseLeave}
     onClick={onClick}
-    className={`text-3xl px-0.5 transition-colors ${active ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-300'}`}
-    aria-label={active ? 'selected' : 'unselected'}
   >
-    {'★'}
-  </button>
+    <StarIcon className={`w-8 h-8 ${filled ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />
+    {half && (
+      <div className="absolute top-0 left-0 w-1/2 h-full overflow-hidden">
+        <StarIcon className="w-8 h-8 text-yellow-400 fill-current" />
+      </div>
+    )}
+  </div>
 );
 
 const MealReview = ({ onReviewSubmit, onCancel }) => {
   const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -46,9 +53,26 @@ const MealReview = ({ onReviewSubmit, onCancel }) => {
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
         <label className="block text-sm font-medium mb-2 text-text-secondary">Rating</label>
-        <div className="flex items-center">
+        <div className="flex items-center" onMouseLeave={() => setHoverRating(0)}>
           {[1, 2, 3, 4, 5].map((star) => (
-            <Star key={star} active={star <= rating} onClick={() => setRating(star)} />
+            <Star
+              key={star}
+              filled={hoverRating >= star || rating >= star}
+              half={
+                (hoverRating > star - 1 && hoverRating < star) ||
+                (rating > star - 1 && rating < star)
+              }
+              onMouseEnter={(e) => {
+                const rect = e.target.getBoundingClientRect();
+                const isHalf = e.clientX - rect.left < rect.width / 2;
+                setHoverRating(star - (isHalf ? 0.5 : 0));
+              }}
+              onClick={(e) => {
+                const rect = e.target.getBoundingClientRect();
+                const isHalf = e.clientX - rect.left < rect.width / 2;
+                setRating(star - (isHalf ? 0.5 : 0));
+              }}
+            />
           ))}
         </div>
       </div>

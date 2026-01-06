@@ -1,6 +1,6 @@
 export const nav = [
   { label: 'Home', to: '/' },
-  { label: 'Features', to: '/features' },
+  { label: 'Features', to: '/features#reviews' },
 ];
 
 export const features = [
@@ -44,12 +44,9 @@ export const faqs = [
 export const footer = {
   sitemap: [
     { label: 'Product', links: [ ['Home', '/'], ['Features', '/features'] ] },
-    { label: 'Company', links: [ ['About', '#'], ['Careers', '#'] ] },
-    { label: 'Resources', links: [ ['Docs', '#'], ['Status', '#'], ['Support', '#'] ] },
   ],
   socials: [
-    { label: 'Twitter', href: '#' },
-    { label: 'Instagram', href: '#' },
+    { label: 'LinkedIn', href: '#' },
     { label: 'GitHub', href: '#' },
   ],
 };

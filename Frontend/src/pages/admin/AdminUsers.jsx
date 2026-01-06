@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
 import Button from '../../components/ui/Button';
 import { useUser } from '../../contexts/UserContext';
+import { Settings } from 'lucide-react'; // Import Settings icon from lucide-react
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [error, setError] = useState('');
   const { user: currentUser, loading: loadingUserContext } = useUser();
+  const [isEditingMode, setIsEditingMode] = useState(false); // New state for global editing mode
 
   console.log("AdminUsers: currentUser", currentUser);
   console.log("AdminUsers: currentUser?.is_owner", currentUser?.is_owner);
@@ -58,7 +60,19 @@ export default function AdminUsers() {
 
   return (
     <div className="bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 shadow-lg p-6 dark:bg-slate-800/80 dark:border-slate-700">
-      <h2 className="text-2xl font-bold text-text-primary mb-4 dark:text-white">All Users</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-bold text-text-primary dark:text-white">All Users</h2>
+        {currentUser?.is_owner && (
+          <Button 
+            variant="ghost" 
+            onClick={() => setIsEditingMode(!isEditingMode)}
+            className={`p-2 rounded-full ${isEditingMode ? 'bg-primary/20 text-primary' : 'text-text-secondary hover:bg-gray-200 dark:hover:bg-slate-700'}`}
+            title={isEditingMode ? "Exit Editing Mode" : "Enter Editing Mode"}
+          >
+            <Settings /> {/* Using Settings icon from lucide-react */}
+          </Button>
+        )}
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead>
@@ -67,7 +81,7 @@ export default function AdminUsers() {
               <th className="p-3 text-sm font-semibold text-text-secondary dark:text-gray-400">Email</th>
               <th className="p-3 text-sm font-semibold text-text-secondary dark:text-gray-400">Role</th>
               <th className="p-3 text-sm font-semibold text-text-secondary dark:text-gray-400">Joined</th>
-              {currentUser?.is_owner && <th className="p-3 text-sm font-semibold text-text-secondary dark:text-gray-400">Actions</th>}
+              {currentUser?.is_owner && isEditingMode && <th className="p-3 text-sm font-semibold text-text-secondary dark:text-gray-400">Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -87,7 +101,7 @@ export default function AdminUsers() {
                   </span>
                 </td>
                 <td className="p-3 text-text-secondary dark:text-gray-400">{new Date(user.created_at).toLocaleDateString()}</td>
-                {currentUser?.is_owner && (
+                {currentUser?.is_owner && isEditingMode && (
                   <td className="p-3 flex gap-2">
                     {!user.is_owner && ( // Owners cannot delete or demote themselves or other owners
                       <>
@@ -96,7 +110,7 @@ export default function AdminUsers() {
                           onClick={() => handleToggleAdmin(user.id, user.is_admin)}
                           className="py-1 px-2 text-xs"
                         >
-                          {user.is_admin ? 'Demote' : 'Promote to Admin'}
+                          {user.is_admin ? 'Demote' : 'Promote'}
                         </Button>
                         <Button 
                           variant="danger" 

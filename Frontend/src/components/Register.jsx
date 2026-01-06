@@ -49,20 +49,20 @@ function Register({ onRegisterSuccess, onSwitchToLogin }){
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="w-full">
                 <label htmlFor="firstName" className="block text-sm font-medium text-text-secondary">First Name</label>
-                <input id="firstName" type="text" value={firstName} onChange={(e)=>setFirstName(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary" autoComplete="given-name" />
+                <input id="firstName" type="text" value={firstName} onChange={(e)=>setFirstName(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary dark:bg-white dark:text-gray-900" autoComplete="given-name" />
               </div>
               <div className="w-full">
                 <label htmlFor="lastName" className="block text-sm font-medium text-text-secondary">Last Name</label>
-                <input id="lastName" type="text" value={lastName} onChange={(e)=>setLastName(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary" autoComplete="family-name" />
+                <input id="lastName" type="text" value={lastName} onChange={(e)=>setLastName(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary dark:bg-white dark:text-gray-900" autoComplete="family-name" />
               </div>
             </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-text-secondary">Email</label>
-              <input id="email" type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary" autoComplete="email" />
+              <input id="email" type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary dark:bg-white dark:text-gray-900" autoComplete="email" />
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-text-secondary">Password</label>
-              <input id="password" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary" autoComplete="new-password" />
+              <input id="password" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary dark:bg-white dark:text-gray-900" autoComplete="new-password" />
             </div>
             <Button type="submit" className="w-full">Create Account</Button>
             <div className="text-sm text-center text-text-secondary">

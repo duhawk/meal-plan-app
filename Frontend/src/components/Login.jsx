@@ -3,11 +3,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import Button from './ui/Button';
 import { useUser } from '../contexts/UserContext';
+import { Eye, EyeOff } from 'lucide-react'; // Import Eye and EyeOff icons
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false); // State for password visibility
   const navigate = useNavigate();
   const { login } = useUser();
 
@@ -48,21 +50,32 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary"
+              className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary dark:bg-white dark:text-gray-900"
               autoComplete="email"
             />
           </div>
-          <div>
+          <div className="relative"> {/* Added relative positioning for the icon */}
             <label htmlFor="password"className="block text-sm font-medium text-text-secondary">Password</label>
             <input
               id="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'} // Toggle input type
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary"
+              className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary pr-10 dark:bg-white dark:text-gray-900" // Added pr-10 for icon spacing
               autoComplete="current-password"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5 mt-6" // Position the icon
+            >
+              {showPassword ? (
+                <EyeOff className="h-5 w-5 text-gray-400" aria-hidden="true" />
+              ) : (
+                <Eye className="h-5 w-5 text-gray-400" aria-hidden="true" />
+              )}
+            </button>
           </div>
           <Button type="submit" className="w-full">Sign In</Button>
         </form>

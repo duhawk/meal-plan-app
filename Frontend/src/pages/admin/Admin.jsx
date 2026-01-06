@@ -7,6 +7,8 @@ export default function Admin() {
     { to: "reviews", label: "Reviews" },
     { to: "attendance", label: "Attendance" },
     { to: "users", label: "Users" },
+    { to: "late-plates", label: "Late Plates" },
+    { to: "recommendations", label: "Recommendations" },
   ];
 
   return (
@@ -21,11 +23,11 @@ export default function Admin() {
         </Link>
       </div>
       
-      <div className="bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 p-2 flex flex-wrap gap-2 dark:bg-slate-800/80 dark:border-slate-700">
+      <div className="bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 p-2 flex gap-2 dark:bg-slate-800/80 dark:border-slate-700 overflow-x-auto">
         {adminNav.map(item => (
           <NavLink key={item.to} to={item.to}>
             {({ isActive }) => (
-              <Button variant={isActive ? 'primary' : 'secondary'} className="w-full sm:w-auto">
+              <Button variant={isActive ? 'primary' : 'secondary'} className="px-2 py-1 text-sm whitespace-nowrap h-8">
                 {item.label}
               </Button>
             )}

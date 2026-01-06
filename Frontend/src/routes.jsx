@@ -17,6 +17,7 @@ import PastMeals from "./pages/app/PastMeals";
 import MealRecommendationForm from "./pages/app/MealRecommendationForm";
 
 // Admin placeholders 
+import AdminLatePlates from "./pages/admin/AdminLatePlates";
 import Admin from "./pages/admin/Admin";
 import AdminMeals from "./pages/admin/AdminMeals";
 import AdminReviews from "./pages/admin/AdminReviews.jsx";
@@ -24,6 +25,7 @@ import AdminAttendance from "./pages/admin/AdminAttendance.jsx";
 import AdminUsers from "./pages/admin/AdminUsers.jsx";
 import EditMeal from "./pages/admin/EditMeal.jsx";
 import MealAttendanceDetails from "./pages/admin/MealAttendanceDetails.jsx";
+import AdminRecommendations from "./pages/admin/AdminRecommendations"; // Import AdminRecommendations
 
 function isAuthed() { return Boolean(localStorage.getItem("token")); }
 
@@ -70,6 +72,8 @@ const router = createBrowserRouter([
           { path: "reviews", element: <AdminReviews /> },
           { path: "attendance", element: <AdminAttendance /> },
           { path: "users", element: <AdminUsers /> },
+          { path: "late-plates", element: <AdminLatePlates /> }, // New route for late plates
+          { path: "recommendations", element: <AdminRecommendations /> }, // New route for recommendations
           { path: "edit-meal/:mealId", element: <EditMeal /> },
           { path: "attendance/:mealId", element: <MealAttendanceDetails /> },
         ],

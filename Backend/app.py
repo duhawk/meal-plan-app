@@ -48,8 +48,27 @@ from database import db
 db.init_app(app)
 bcrypt = Bcrypt(app)
 migrate = Migrate(app, db)
+from flask_marshmallow import Marshmallow
+ma = Marshmallow(app)
 
-from models import User, Meal, Review, LatePlate, MealAttendance
+from models import User, Meal, Review, LatePlate, MealAttendance, Recommendation
+
+class UserSchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = User
+        load_instance = True
+        include_fk = True
+
+class RecommendationSchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = Recommendation
+        load_instance = True
+        include_fk = True
+    
+    user = ma.Nested(lambda: UserSchema(only=("id", "name", "email")))
+
+recommendation_schema = RecommendationSchema()
+recommendations_schema = RecommendationSchema(many=True)
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -178,9 +197,49 @@ def get_me():
         'id': user.id,
         'email': user.email,
         'name': user.name,
-        'is_admin': user.is_admin
+        'is_admin': user.is_admin,
+        'is_owner': user.is_owner
     }), 200
     
+@app.route('/api/today-meals', methods=['GET'])
+@jwt_required
+def get_today_meals():
+    try:
+        user_id = g.current_user.id
+        
+        attendance_subquery = db.session.query(
+            MealAttendance.meal_id,
+            func.count(MealAttendance.id).label('attendance_count')
+        ).group_by(MealAttendance.meal_id).subquery()
+
+        today = datetime.now().date()
+        
+        user_attendance = {ma.meal_id for ma in MealAttendance.query.filter_by(user_id=user_id).all()}
+
+        meals = db.session.query(
+            Meal,
+            attendance_subquery.c.attendance_count
+        ).outerjoin(
+            attendance_subquery, Meal.id == attendance_subquery.c.meal_id
+        ).filter(db.func.date(Meal.meal_date) == today).order_by(Meal.meal_date).all()
+
+        meals_data = []
+        for meal, attendance_count in meals:
+            meals_data.append({
+                'id': meal.id,
+                'meal_date': meal.meal_date.isoformat(),
+                'meal_type': meal.meal_type,
+                'dish_name': meal.dish_name,
+                'description': meal.description,
+                'image_url': meal.image_url,
+                'is_attending': meal.id in user_attendance,
+                'attendance_count': attendance_count or 0,
+            })
+        return jsonify({'meals': meals_data}), 200
+    except Exception as e:
+        print(f"Error fetching today's meals: {e}")
+        return jsonify({'error': 'Failed to fetch today\'s meals.'}), 500
+
 @app.route('/api/menu', methods=['GET'])
 @jwt_required
 def get_weekly_menu():
@@ -395,11 +454,27 @@ def request_late_plate(meal_id):
         if not meal:
             return jsonify({'error': 'Meal not found.'}), 404
         
-        existing_late_plate = LatePlate.query.filter_by(user_id=user_id, meal_id=meal_id).first()
-        if existing_late_plate:
-            return jsonify({'error': 'You have already requested a late plate for this meal.'}), 400
+        # Check if the meal date has already passed
+        if meal.meal_date.date() < datetime.now().date():
+            return jsonify({'error': 'Cannot request a late plate for a past meal.'}), 400
         
-        new_late_plate = LatePlate(meal_id=meal_id, user_id=user_id, notes=notes, status='pending')
+        today_date = datetime.now().date() # Get today's date
+        existing_late_plate = LatePlate.query.filter_by(
+            user_id=user_id, 
+            meal_id=meal_id, 
+            request_date=today_date # Filter by today's date
+        ).first()
+        
+        if existing_late_plate:
+            return jsonify({'error': 'You have already requested a late plate for this meal today.'}), 400
+        
+        new_late_plate = LatePlate(
+            meal_id=meal_id, 
+            user_id=user_id, 
+            notes=notes, 
+            status='pending',
+            request_date=today_date # Set request_date
+        )
         db.session.add(new_late_plate)
         db.session.commit()
         return jsonify({'message': 'Late plate request submitted successfully.', 'late_plate_id': new_late_plate.id}), 201
@@ -721,6 +796,93 @@ def update_user_role(user_id):
         print(f"Error updating user role for user {user_id}: {e}")
         return jsonify({'error': 'Failed to update user role.'}), 500
 
+@app.route('/api/admin/late-plates/today', methods=['GET'])
+@admin_required
+def get_today_late_plates():
+    try:
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        late_plates = db.session.query(LatePlate).options(
+            joinedload(LatePlate.user),
+            joinedload(LatePlate.meal)
+        ).join(Meal).filter( # Explicitly join Meal table
+            db.func.date(LatePlate.request_date) == today.date(), # Filter by today's request date
+            db.func.date(Meal.meal_date) >= today.date() # Only show for meals on or after today
+        ).order_by(LatePlate.request_time.desc()).all()
+
+        late_plates_data = [{
+            'id': lp.id,
+            'user_id': lp.user_id,
+            'user_name': lp.user.name if lp.user else 'Unknown User',
+            'meal_id': lp.meal_id,
+            'meal_dish_name': lp.meal.dish_name if lp.meal else 'Unknown Meal',
+            'meal_date': lp.meal.meal_date.isoformat() if lp.meal else None,
+            'request_time': lp.request_time.isoformat(),
+            'status': lp.status,
+            'notes': lp.notes,
+        } for lp in late_plates]
+
+        return jsonify({'late_plates': late_plates_data}), 200
+    except Exception as e:
+        print(f"Error fetching today's late plates: {e}")
+        return jsonify({'error': 'Failed to fetch today\'s late plates.'}), 500
+
+@app.route('/api/recommendations', methods=['POST'])
+@jwt_required
+def submit_recommendation():
+    try:
+        data = request.get_json()
+        meal_name = data.get('meal_name')
+        description = data.get('description')
+        link = data.get('link')
+        user_id = g.current_user.id
+
+        if not meal_name:
+            return jsonify({'error': 'Meal name is required.'}), 400
+        
+        new_recommendation = Recommendation(
+            user_id=user_id,
+            meal_name=meal_name,
+            description=description,
+            link=link
+        )
+        db.session.add(new_recommendation)
+        db.session.commit()
+        return jsonify({'message': 'Recommendation submitted successfully.', 'recommendation_id': new_recommendation.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error submitting recommendation: {e}")
+        return jsonify({'error': 'Failed to submit recommendation.'}), 500
+
+@app.route('/api/admin/recommendations', methods=['GET'])
+@admin_required
+def get_all_recommendations():
+    try:
+        recommendations = db.session.query(Recommendation).options(
+            joinedload(Recommendation.user)
+        ).order_by(Recommendation.created_at.desc()).all()
+        
+        return recommendations_schema.jsonify(recommendations), 200
+    except Exception as e:
+        print(f"Error fetching recommendations: {e}")
+        return jsonify({'error': 'Failed to fetch recommendations.'}), 500
+
+@app.route('/api/admin/recommendations/<int:recommendation_id>', methods=['DELETE'])
+@admin_required
+def delete_recommendation(recommendation_id):
+    try:
+        recommendation = Recommendation.query.get(recommendation_id)
+        if not recommendation:
+            return jsonify({'error': 'Recommendation not found.'}), 404
+        
+        db.session.delete(recommendation)
+        db.session.commit()
+        return jsonify({'message': 'Recommendation deleted successfully.'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting recommendation {recommendation_id}: {e}")
+        return jsonify({'error': 'Failed to delete recommendation.'}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
 
@@ -808,8 +970,7 @@ def search_meals():
             Meal.dish_name,
             db.func.array_agg(Meal.meal_date).label('all_dates')
         ).filter(
-            Meal.dish_name.ilike(f'%{query}%'),
-            Meal.image_url.isnot(None) # Only consider meals with images
+            Meal.dish_name.ilike(f'%{query}%')
         ).group_by(Meal.dish_name).subquery()
 
         # Main query to get the most recent meal for each dish_name
@@ -818,13 +979,12 @@ def search_meals():
             Meal.dish_name,
             db.func.max(Meal.meal_date).label('max_meal_date')
         ).filter(
-            Meal.dish_name.ilike(f'%{query}%'),
-            Meal.image_url.isnot(None)
+            Meal.dish_name.ilike(f'%{query}%')
         ).group_by(Meal.dish_name).subquery()
 
         past_meals = db.session.query(Meal, dates_subquery.c.all_dates).join(
             sub,
-            sa.and_(Meal.dish_name == sub.c.dish_name, Meal.meal_date == sub.c.max_meal_date)
+            and_(Meal.dish_name == sub.c.dish_name, Meal.meal_date == sub.c.max_meal_date)
         ).join(
             dates_subquery, Meal.dish_name == dates_subquery.c.dish_name
         ).order_by(Meal.dish_name).limit(10).all()
