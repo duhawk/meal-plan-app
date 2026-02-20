@@ -34,12 +34,11 @@ s3 = boto3.client(
     region_name=AWS_REGION
 )
 
-def upload_file_to_s3(file, filename, acl="public-read"):
+def upload_file_to_s3(file, filename):
     """
     Uploads a file to an S3 bucket
     :param file: File to upload
     :param filename: S3 object name
-    :param acl: Access control list
     :return: S3 object URL or None if upload fails
     """
     try:
@@ -48,7 +47,6 @@ def upload_file_to_s3(file, filename, acl="public-read"):
             AWS_BUCKET_NAME,
             filename,
             ExtraArgs={
-                "ACL": acl,
                 "ContentType": file.content_type
             }
         )
