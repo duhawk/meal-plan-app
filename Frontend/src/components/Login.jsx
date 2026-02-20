@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { api } from '../lib/api';
 import Button from './ui/Button';
 import { useUser } from '../contexts/UserContext';
 import { Eye, EyeOff } from 'lucide-react'; // Import Eye and EyeOff icons
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const { state } = useLocation();
+  const [email, setEmail] = useState(state?.email || '');
+  const [password, setPassword] = useState(state?.password || '');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false); // State for password visibility
   const navigate = useNavigate();
