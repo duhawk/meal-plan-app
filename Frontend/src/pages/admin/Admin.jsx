@@ -1,15 +1,23 @@
 import { Outlet, NavLink, Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
+import { useUser } from "../../contexts/UserContext";
 
 export default function Admin() {
+  const { user } = useUser();
+
   const adminNav = [
     { to: "meals", label: "Meals" },
-    { to: "reviews", label: "Reviews" },
+    { to: "late-plates", label: "Late Plates" },
     { to: "attendance", label: "Attendance" },
     { to: "users", label: "Users" },
-    { to: "late-plates", label: "Late Plates" },
     { to: "recommendations", label: "Recommendations" },
+    { to: "analytics", label: "Analytics" },
   ];
+
+  if (user?.is_owner) {
+    adminNav.push({ to: "reviews", label: "Reviews" });
+    adminNav.push({ to: "settings", label: "Settings" });
+  }
 
   return (
     <div className="space-y-8">
@@ -22,7 +30,7 @@ export default function Admin() {
           <Button variant="secondary">Back to App</Button>
         </Link>
       </div>
-      
+
       <div className="bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 p-2 flex gap-2 dark:bg-slate-800/80 dark:border-slate-700 overflow-x-auto">
         {adminNav.map(item => (
           <NavLink key={item.to} to={item.to}>

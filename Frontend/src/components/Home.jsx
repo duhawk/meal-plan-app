@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import MealCard from './MealCard';
 import Modal from './Modal';
 import MealReview from './MealReview';
+import { useUser } from '../contexts/UserContext';
 
 export default function Home() {
   const [meals, setMeals] = useState([]);
@@ -15,31 +16,76 @@ export default function Home() {
   const [showReview, setShowReview] = useState(false);
   const [showLatePlate, setShowLatePlate] = useState(false);
   const [lateNotes, setLateNotes] = useState('');
+  const [latePickupTime, setLatePickupTime] = useState('');
+  const { user } = useUser();
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setErr('');
-      try {
-        const data = await api('/api/today-meals');
-        setMeals(Array.isArray(data?.meals) ? data.meals : []);
-      } catch (e) {
-        setErr(e.message || 'Failed to load meals.');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const fetchMeals = async () => {
+    setLoading(true);
+    setErr('');
+    try {
+      const data = await api('/api/today-meals');
+      const raw = Array.isArray(data?.meals) ? data.meals : [];
+      // Ensure Lunch appears before Dinner
+      raw.sort((a, b) => {
+        if (a.meal_type === 'Lunch' && b.meal_type === 'Dinner') return -1;
+        if (a.meal_type === 'Dinner' && b.meal_type === 'Lunch') return 1;
+        return 0;
+      });
+      setMeals(raw);
+    } catch (e) {
+      setErr(e.message || 'Failed to load meals.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchMeals(); }, []);
 
   const handleReviewSubmit = async ({ rating, comment }) => {
     if (!activeMeal) return;
+    const isEdit = !!activeMeal.user_review;
     try {
-      await api(`/api/meals/${activeMeal.id}/reviews`, {
-        method: 'POST',
-        body: { rating, comment },
-      });
+      if (isEdit) {
+        await api(`/api/meals/${activeMeal.id}/reviews/${activeMeal.user_review.id}`, {
+          method: 'PUT',
+          body: { rating, comment },
+        });
+      } else {
+        await api(`/api/meals/${activeMeal.id}/reviews`, {
+          method: 'POST',
+          body: { rating, comment },
+        });
+      }
       setShowReview(false);
-      setSuccess('Thanks for the feedback!');
+      setSuccess(isEdit ? 'Review updated!' : 'Thanks for the feedback!');
+      fetchMeals();
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+
+  const handleReviewDelete = async () => {
+    if (!activeMeal?.user_review) return;
+    try {
+      await api(`/api/meals/${activeMeal.id}/reviews/${activeMeal.user_review.id}`, { method: 'DELETE' });
+      setShowReview(false);
+      setSuccess('Review deleted.');
+      fetchMeals();
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+
+  const handleConfirmAttendance = async (meal, confirmed) => {
+    try {
+      await api(`/api/meals/${meal.id}/attendance/confirm`, {
+        method: 'POST',
+        body: { confirmed },
+      });
+      setMeals((cur) =>
+        cur.map((m) => m.id === meal.id ? { ...m, attendance_confirmed: confirmed } : m)
+      );
+      setSuccess(confirmed ? 'Attendance confirmed — thanks!' : 'Got it, marked as no-show.');
     } catch (e) {
       setErr(e.message);
     }
@@ -51,7 +97,7 @@ export default function Home() {
     try {
       await api(`/api/meals/${activeMeal.id}/late-plates`, {
         method: 'POST',
-        body: { notes: lateNotes || undefined },
+        body: { notes: lateNotes || undefined, pickup_time: latePickupTime || undefined },
       });
       setShowLatePlate(false);
       setSuccess('Late plate requested. We got you covered.');
@@ -64,7 +110,7 @@ export default function Home() {
     return <div>Loading...</div>;
   }
 
-  if (err) {
+  if (err && !meals.length) {
     return <div className="text-red-500">{err}</div>;
   }
 
@@ -80,39 +126,68 @@ export default function Home() {
           {success}
         </div>
       )}
+      {err && (
+        <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {err}
+        </div>
+      )}
 
       {meals.length > 0 ? (
         <div className="space-y-6">
-          {meals.map((meal) => (
-            <MealCard
-              key={meal.id}
-              meal={meal}
-              onReview={() => {
-                setActiveMeal(meal);
-                setShowReview(true);
-                setSuccess('');
-              }}
-              onLatePlate={() => {
-                setActiveMeal(meal);
-                setShowLatePlate(true);
-                setLateNotes('');
-                setSuccess('');
-              }}
-              onAttend={async () => {
-                try {
-                  const data = await api(`/api/meals/${meal.id}/attendance`, { method: 'POST' });
-                  setMeals((currentMeals) =>
-                    currentMeals.map((m) =>
-                      m.id === meal.id ? { ...m, is_attending: data.is_attending } : m
-                    )
-                  );
-                  setSuccess(data.message);
-                } catch (e) {
-                  setErr(e.message);
-                }
-              }}
-            />
-          ))}
+          {meals.map((meal) => {
+            const mealDate = new Date(meal.meal_date);
+            const isPast = mealDate < new Date();
+            const needsConfirmation = isPast && meal.is_attending && meal.attendance_confirmed === null;
+            return (
+              <div key={meal.id} className="space-y-3">
+                <MealCard
+                  meal={meal}
+                  onReview={() => {
+                    setActiveMeal(meal);
+                    setShowReview(true);
+                    setSuccess('');
+                    setErr('');
+                  }}
+                  onLatePlate={() => {
+                    setActiveMeal(meal);
+                    setShowLatePlate(true);
+                    setLateNotes('');
+                    setLatePickupTime('');
+                    setSuccess('');
+                    setErr('');
+                  }}
+                  onAttend={async () => {
+                    try {
+                      const data = await api(`/api/meals/${meal.id}/attendance`, { method: 'POST' });
+                      setMeals((current) =>
+                        current.map((m) =>
+                          m.id === meal.id ? { ...m, is_attending: data.is_attending } : m
+                        )
+                      );
+                      setSuccess(data.message);
+                    } catch (e) {
+                      setErr(e.message);
+                    }
+                  }}
+                />
+                {needsConfirmation && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                      Did you eat at <span className="font-semibold">{meal.dish_name}</span>?
+                    </p>
+                    <div className="flex gap-2">
+                      <Button className="text-xs py-1.5 px-3" onClick={() => handleConfirmAttendance(meal, true)}>
+                        Yes
+                      </Button>
+                      <Button variant="secondary" className="text-xs py-1.5 px-3" onClick={() => handleConfirmAttendance(meal, false)}>
+                        No
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="text-center bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 p-12 dark:bg-slate-800/80 dark:border-slate-700">
@@ -124,19 +199,26 @@ export default function Home() {
         <Link to="/app/menu">
           <Button>View Weekly Menu</Button>
         </Link>
-        <Link to="/app/reviews">
-          <Button variant="secondary">See All Reviews</Button>
-        </Link>
+        {user?.is_owner && (
+          <Link to="/app/reviews">
+            <Button variant="secondary">See All Reviews</Button>
+          </Link>
+        )}
       </div>
 
       {/* Review modal */}
       <Modal
         open={showReview}
-        title={activeMeal ? `Review: ${activeMeal.dish_name}` : 'Review Meal'}
+        title={activeMeal ? `${activeMeal.user_review ? 'Edit' : ''} Review: ${activeMeal.dish_name}` : 'Review Meal'}
         onClose={() => setShowReview(false)}
       >
         <MealReview
+          key={activeMeal?.id}
+          isEdit={!!activeMeal?.user_review}
+          initialRating={activeMeal?.user_review?.rating ?? 0}
+          initialComment={activeMeal?.user_review?.comment ?? ''}
           onReviewSubmit={handleReviewSubmit}
+          onDelete={handleReviewDelete}
           onCancel={() => setShowReview(false)}
         />
       </Modal>
@@ -149,12 +231,21 @@ export default function Home() {
       >
         <form className="space-y-4" onSubmit={handleLatePlateSubmit}>
           <div>
-            <label className="block text-sm font-medium mb-1 text-text-secondary">Notes (allergies, pickup window, etc.)</label>
+            <label className="block text-sm font-medium mb-1 text-text-secondary">Notes (allergies, requests, etc.)</label>
             <textarea
-              className="input mt-1 w-full bg-white/90 border-gray-300 rounded-lg text-text-primary"
+              className="input mt-1 w-full bg-white/90 border-gray-300 rounded-lg text-text-primary dark:bg-slate-700 dark:border-slate-600 dark:text-white dark:placeholder-gray-400"
               value={lateNotes}
               onChange={(e) => setLateNotes(e.target.value)}
               placeholder="Optional"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1 text-text-secondary">Desired Pickup Time (optional)</label>
+            <input
+              type="time"
+              className="input mt-1 w-full bg-white/90 border-gray-300 rounded-lg text-text-primary dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+              value={latePickupTime}
+              onChange={(e) => setLatePickupTime(e.target.value)}
             />
           </div>
           <div className="flex gap-3">

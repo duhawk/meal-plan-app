@@ -65,11 +65,6 @@ export default function PastMeals() {
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-bold text-text-primary dark:text-white">{meal.dish_name}</h3>
                     <div className="flex items-center gap-2">
-                      {user?.is_admin && (
-                        <Button variant="danger" onClick={(e) => { e.stopPropagation(); handleDeleteMeal(meal.id); }} className="py-1 px-2 text-xs">
-                          <Trash2 size={16} />
-                        </Button>
-                      )}
                       {isExpanded ? <ChevronUp size={20} className="text-text-secondary dark:text-gray-400" /> : <ChevronDown size={20} className="text-text-secondary dark:text-gray-400" />}
                     </div>
                   </div>
@@ -86,10 +81,17 @@ export default function PastMeals() {
                     <p className="text-text-secondary dark:text-gray-300 mb-4">{meal.description}</p>
                     <div className="space-y-2 mb-4">
                       <h4 className="font-semibold text-text-primary dark:text-white">Past Occurrences:</h4>
-                      {meal.past_occurrences && meal.past_occurrences.map((occurrence, index) => (
-                        <div key={index} className="flex items-center justify-between text-sm text-text-secondary dark:text-gray-400">
+                      {meal.past_occurrences && meal.past_occurrences.map((occurrence) => (
+                        <div key={occurrence.id} className="flex items-center justify-between text-sm text-text-secondary dark:text-gray-400">
                           <span>{new Date(occurrence.date).toLocaleDateString()}</span>
-                          {user?.is_admin && <span>Attendance: {occurrence.attendance}</span>}
+                          <div className="flex items-center gap-2">
+                            {user?.is_admin && <span>Attendance: {occurrence.attendance}</span>}
+                            {user?.is_admin && (
+                              <Button variant="danger" onClick={(e) => { e.stopPropagation(); handleDeleteMeal(occurrence.id); }} className="py-1 px-2 text-xs">
+                                <Trash2 size={16} />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>

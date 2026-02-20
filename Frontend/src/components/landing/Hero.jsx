@@ -89,7 +89,6 @@ export default function Hero() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link to="/register" className="btn bg-white text-gray-900 hover:bg-gray-200">Create account</Link>
-            <Link to="/login" className="btn bg-transparent border-gray-400 text-white hover:bg-gray-800">I have an access code</Link>
           </div>
         </motion.div>
 

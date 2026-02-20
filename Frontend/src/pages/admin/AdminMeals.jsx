@@ -2,14 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { api, BASE_URL } from '../../lib/api';
 import Button from '../../components/ui/Button';
 
-// A stable debounce implementation using setTimeout
 const debounce = (func, delay) => {
   let timeoutId;
   return (...args) => {
     clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
-      func.apply(this, args);
-    }, delay);
+    timeoutId = setTimeout(() => func.apply(null, args), delay);
   };
 };
 
@@ -20,17 +17,13 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill }) => {
 
   const debouncedSearch = useCallback(
     debounce(async (query) => {
-      if (query.length < 2) {
-        setSearchResults([]);
-        setIsSearching(false);
-        return;
-      }
+      if (query.length < 2) { setSearchResults([]); setIsSearching(false); return; }
       setIsSearching(true);
       try {
         const { meals } = await api(`/api/meals/search?q=${query}`);
         setSearchResults(meals);
-      } catch (error) {
-        console.error("Search failed:", error);
+      } catch {
+        // ignore
       } finally {
         setIsSearching(false);
       }
@@ -38,9 +31,7 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill }) => {
     []
   );
 
-  useEffect(() => {
-    debouncedSearch(searchQuery);
-  }, [searchQuery, debouncedSearch]);
+  useEffect(() => { debouncedSearch(searchQuery); }, [searchQuery, debouncedSearch]);
 
   const handleSelectMeal = (selectedMeal) => {
     onAutofill(meal.id, selectedMeal);
@@ -52,14 +43,11 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill }) => {
 
   return (
     <div className="p-4 bg-white/50 dark:bg-slate-700/50 rounded-lg border border-border-light dark:border-slate-700 relative">
-      <h3 className="font-semibold text-text-primary dark:text-white">
-        {new Date(meal.meal_date).toLocaleDateString(undefined, { weekday: 'long' })} - {meal.meal_type}
-      </h3>
       <div className="mt-2 space-y-3">
         <div className="relative">
           <label className="text-xs text-text-secondary dark:text-gray-400">Dish Name (type to search)</label>
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={meal.dish_name}
             onChange={(e) => {
               onUpdate(meal.id, 'dish_name', e.target.value);
@@ -71,13 +59,13 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill }) => {
             <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 rounded-md shadow-lg border border-border-light dark:border-slate-600">
               <ul>
                 {searchResults.map((result, index) => (
-                  <li 
-                    key={index} 
+                  <li
+                    key={index}
                     onClick={() => handleSelectMeal(result)}
                     className="px-3 py-2 text-sm text-text-primary dark:text-white hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer"
                   >
                     {result.dish_name}
-                    {result.past_dates && result.past_dates.length > 0 && (
+                    {result.past_dates?.length > 0 && (
                       <span className="ml-2 text-xs text-text-secondary dark:text-gray-400">
                         (Also on: {result.past_dates.map(d => new Date(d).toLocaleDateString()).join(', ')})
                       </span>
@@ -90,7 +78,7 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill }) => {
         </div>
         <div>
           <label className="text-xs text-text-secondary dark:text-gray-400">Description</label>
-          <textarea 
+          <textarea
             value={meal.description}
             onChange={(e) => onUpdate(meal.id, 'description', e.target.value)}
             rows="2"
@@ -98,9 +86,20 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill }) => {
           />
         </div>
         <div>
+          <label className="text-xs text-text-secondary dark:text-gray-400">Late Plate Cutoff (hours before meal, optional)</label>
+          <input
+            type="number"
+            min="0"
+            value={meal.late_plate_hours_before ?? ''}
+            onChange={(e) => onUpdate(meal.id, 'late_plate_hours_before', e.target.value === '' ? null : parseInt(e.target.value, 10))}
+            placeholder="e.g. 2 — leave blank for no cutoff"
+            className="input w-full text-sm bg-white/80 border-gray-300 rounded-md dark:bg-slate-600 dark:border-slate-500 dark:text-white"
+          />
+        </div>
+        <div>
           <label className="text-xs text-text-secondary dark:text-gray-400">Image</label>
           {imageUrl && <img src={imageUrl} alt="Current" className="w-full h-24 object-cover rounded-md my-2" />}
-          <input 
+          <input
             type="file"
             onChange={(e) => onFileChange(meal.id, e.target.files[0])}
             accept="image/*"
@@ -112,6 +111,17 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill }) => {
   );
 };
 
+// Group meal slots by day date string
+function groupSlotsByDay(slots) {
+  const days = {};
+  slots.forEach((slot) => {
+    const dateKey = new Date(slot.meal_date).toDateString();
+    if (!days[dateKey]) days[dateKey] = { date: new Date(slot.meal_date), Lunch: null, Dinner: null };
+    days[dateKey][slot.meal_type] = slot;
+  });
+  return Object.values(days).sort((a, b) => a.date - b.date);
+}
+
 export default function AdminMeals() {
   const [mealSlots, setMealSlots] = useState([]);
   const [imageFiles, setImageFiles] = useState({});
@@ -120,38 +130,32 @@ export default function AdminMeals() {
   const [submitting, setSubmitting] = useState(false);
 
   const handleGenerateWeek = () => {
-    const startDateStr = prompt("Enter the start date for the week (e.g., YYYY-MM-DD, will be treated as Sunday):", new Date().toISOString().slice(0, 10));
+    const startDateStr = prompt("Enter the start date for the week (YYYY-MM-DD, treated as Sunday):", new Date().toISOString().slice(0, 10));
     if (!startDateStr) return;
 
     const inputDate = new Date(startDateStr + 'T00:00:00');
-    const dayOfWeek = inputDate.getDay();
-    
     const sundayDate = new Date(inputDate);
-    sundayDate.setDate(inputDate.getDate() - dayOfWeek);
+    sundayDate.setDate(inputDate.getDate() - inputDate.getDay());
 
     const newSlots = [];
-    
+
     const sunday = new Date(sundayDate);
     sunday.setHours(17, 0, 0, 0);
-    newSlots.push({ id: 'dinner-sun', meal_date: sunday.toISOString(), meal_type: 'Dinner', dish_name: '', description: '', image_url: null });
+    newSlots.push({ id: 'dinner-sun', meal_date: sunday.toISOString(), meal_type: 'Dinner', dish_name: '', description: '', image_url: null, late_plate_hours_before: null });
 
     for (let i = 1; i <= 4; i++) {
       const day = new Date(sundayDate);
       day.setDate(sundayDate.getDate() + i);
-      
-      const lunchDate = new Date(day);
-      lunchDate.setHours(12, 0, 0, 0);
-      newSlots.push({ id: `lunch-${i}`, meal_date: lunchDate.toISOString(), meal_type: 'Lunch', dish_name: '', description: '', image_url: null });
-
-      const dinnerDate = new Date(day);
-      dinnerDate.setHours(17, 0, 0, 0);
-      newSlots.push({ id: `dinner-${i}`, meal_date: dinnerDate.toISOString(), meal_type: 'Dinner', dish_name: '', description: '', image_url: null });
+      const lunchDate = new Date(day); lunchDate.setHours(12, 0, 0, 0);
+      const dinnerDate = new Date(day); dinnerDate.setHours(17, 0, 0, 0);
+      newSlots.push({ id: `lunch-${i}`, meal_date: lunchDate.toISOString(), meal_type: 'Lunch', dish_name: '', description: '', image_url: null, late_plate_hours_before: null });
+      newSlots.push({ id: `dinner-${i}`, meal_date: dinnerDate.toISOString(), meal_type: 'Dinner', dish_name: '', description: '', image_url: null, late_plate_hours_before: null });
     }
 
     const friday = new Date(sundayDate);
     friday.setDate(sundayDate.getDate() + 5);
     friday.setHours(12, 0, 0, 0);
-    newSlots.push({ id: 'lunch-fri', meal_date: friday.toISOString(), meal_type: 'Lunch', dish_name: '', description: '', image_url: null });
+    newSlots.push({ id: 'lunch-fri', meal_date: friday.toISOString(), meal_type: 'Lunch', dish_name: '', description: '', image_url: null, late_plate_hours_before: null });
 
     setMealSlots(newSlots);
     setImageFiles({});
@@ -160,53 +164,33 @@ export default function AdminMeals() {
   };
 
   const handleUpdateSlot = (id, field, value) => {
-    setMealSlots(currentSlots => 
-      currentSlots.map(slot => slot.id === id ? { ...slot, [field]: value } : slot)
-    );
+    setMealSlots(cur => cur.map(slot => slot.id === id ? { ...slot, [field]: value } : slot));
   };
 
   const handleAutofillSlot = (id, data) => {
-    setMealSlots(currentSlots =>
-      currentSlots.map(slot => slot.id === id ? { ...slot, dish_name: data.dish_name, description: data.description, image_url: data.image_url, meal_type: data.meal_type } : slot)
-    );
+    setMealSlots(cur => cur.map(slot => slot.id === id ? { ...slot, dish_name: data.dish_name, description: data.description, image_url: data.image_url } : slot));
   };
 
   const handleFileChange = (id, file) => {
-    setImageFiles(currentFiles => ({
-      ...currentFiles,
-      [id]: file,
-    }));
-    // When a new file is selected, clear the existing image_url for that slot
-    setMealSlots(currentSlots =>
-      currentSlots.map(slot => slot.id === id ? { ...slot, image_url: null } : slot)
-    );
+    setImageFiles(cur => ({ ...cur, [id]: file }));
+    setMealSlots(cur => cur.map(slot => slot.id === id ? { ...slot, image_url: null } : slot));
   };
 
   const handleSaveAll = async () => {
     setError('');
     setSuccess('');
-    
     const mealsToSave = mealSlots.filter(slot => slot.dish_name.trim() !== '');
-    if (mealsToSave.length === 0) {
-      setError("Please fill in at least one dish name.");
-      return;
-    }
+    if (!mealsToSave.length) { setError("Please fill in at least one dish name."); return; }
 
     const formData = new FormData();
     formData.append('meals', JSON.stringify(mealsToSave));
-    
     mealsToSave.forEach(meal => {
-      if (imageFiles[meal.id]) {
-        formData.append(`image-${meal.id}`, imageFiles[meal.id]);
-      }
+      if (imageFiles[meal.id]) formData.append(`image-${meal.id}`, imageFiles[meal.id]);
     });
 
     setSubmitting(true);
     try {
-      await api('/api/meals/bulk', {
-        method: 'POST',
-        body: formData,
-      });
+      await api('/api/meals/bulk', { method: 'POST', body: formData });
       setSuccess(`${mealsToSave.length} meals saved successfully!`);
       setMealSlots([]);
       setImageFiles({});
@@ -216,6 +200,8 @@ export default function AdminMeals() {
       setSubmitting(false);
     }
   };
+
+  const days = groupSlotsByDay(mealSlots);
 
   return (
     <div className="bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 shadow-lg p-8 dark:bg-slate-800/80 dark:border-slate-700">
@@ -231,12 +217,40 @@ export default function AdminMeals() {
       {success && <div className="mb-4 text-green-600 text-sm">{success}</div>}
 
       {mealSlots.length > 0 && (
-        <div className="space-y-6 mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {mealSlots.map(slot => (
-              <MealSlotForm key={slot.id} meal={slot} onUpdate={handleUpdateSlot} onFileChange={handleFileChange} onAutofill={handleAutofillSlot} />
-            ))}
-          </div>
+        <div className="space-y-8 mt-6">
+          {days.map(({ date, Lunch, Dinner }) => (
+            <div key={date.toDateString()}>
+              <h3 className="text-base font-semibold text-text-primary dark:text-white mb-3">
+                {date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <span className="inline-block mb-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                    Lunch
+                  </span>
+                  {Lunch ? (
+                    <MealSlotForm meal={Lunch} onUpdate={handleUpdateSlot} onFileChange={handleFileChange} onAutofill={handleAutofillSlot} />
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border-light p-6 text-center text-sm text-text-secondary dark:border-slate-600 dark:text-gray-500">
+                      Not scheduled
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <span className="inline-block mb-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                    Dinner
+                  </span>
+                  {Dinner ? (
+                    <MealSlotForm meal={Dinner} onUpdate={handleUpdateSlot} onFileChange={handleFileChange} onAutofill={handleAutofillSlot} />
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border-light p-6 text-center text-sm text-text-secondary dark:border-slate-600 dark:text-gray-500">
+                      Not scheduled
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
           <div className="pt-2 flex justify-end">
             <Button onClick={handleSaveAll} disabled={submitting} className="w-full sm:w-auto">
               {submitting ? 'Saving...' : `Save All ${mealSlots.filter(s => s.dish_name).length} Meals`}
@@ -247,4 +261,3 @@ export default function AdminMeals() {
     </div>
   );
 }
-

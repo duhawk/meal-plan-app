@@ -18,10 +18,10 @@ const Star = ({ filled, half, onMouseEnter, onMouseLeave, onClick }) => (
   </div>
 );
 
-const MealReview = ({ onReviewSubmit, onCancel }) => {
-  const [rating, setRating] = useState(0);
+const MealReview = ({ onReviewSubmit, onCancel, onDelete, initialRating = 0, initialComment = '', isEdit = false }) => {
+  const [rating, setRating] = useState(initialRating);
   const [hoverRating, setHoverRating] = useState(0);
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState(initialComment);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -81,7 +81,7 @@ const MealReview = ({ onReviewSubmit, onCancel }) => {
         <label htmlFor="comment" className="block text-sm font-medium mb-2 text-text-secondary">Comment</label>
         <textarea
           id="comment"
-          className="input mt-1 w-full bg-white/90 border-gray-300 rounded-lg text-text-primary"
+          className="input mt-1 w-full bg-white/90 border-gray-300 rounded-lg text-text-primary dark:bg-slate-700 dark:border-slate-600 dark:text-white dark:placeholder-gray-400"
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           placeholder="Share your thoughts..."
@@ -91,10 +91,17 @@ const MealReview = ({ onReviewSubmit, onCancel }) => {
 
       <div className="flex gap-3 pt-2">
         <Button type="submit" disabled={submitting} className="w-full">
-          {submitting ? 'Submitting…' : 'Submit Review'}
+          {submitting ? 'Submitting…' : isEdit ? 'Update Review' : 'Submit Review'}
         </Button>
         <Button type="button" variant="secondary" onClick={handleCancel} className="w-full">Cancel</Button>
       </div>
+      {isEdit && onDelete && (
+        <div className="pt-1">
+          <Button type="button" variant="danger" onClick={onDelete} className="w-full text-sm">
+            Delete Review
+          </Button>
+        </div>
+      )}
     </form>
   );
 };

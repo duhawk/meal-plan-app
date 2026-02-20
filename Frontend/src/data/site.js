@@ -45,8 +45,5 @@ export const footer = {
   sitemap: [
     { label: 'Product', links: [ ['Home', '/'], ['Features', '/features'] ] },
   ],
-  socials: [
-    { label: 'LinkedIn', href: '#' },
-    { label: 'GitHub', href: '#' },
-  ],
+  socials: [],
 };

@@ -8,9 +8,9 @@ export default function Footer() {
           <div>
             <div className="flex items-center gap-2">
               <div className="h-7 w-7 rounded-lg bg-gradient-to-r from-matte-blue-start to-matte-blue-end" />
-              <div className="text-base font-extrabold text-white">Fraternity Meals</div>
+              <div className="text-base font-extrabold text-white">Ordo</div>
             </div>
-            <p className="mt-3 text-sm text-gray-300">Meal planning built for chapters. Scales to nationals.</p>
+            <p className="mt-3 text-sm text-gray-300">Meal planning built for organizations.</p>
           </div>
           {footer.sitemap.map((s) => (
             <div key={s.label}>
@@ -24,7 +24,7 @@ export default function Footer() {
           ))}
         </div>
         <div className="mt-8 flex items-center justify-between text-sm text-gray-300">
-          <div>© {new Date().getFullYear()} Fraternity Meals</div>
+          <div>© {new Date().getFullYear()} Ordo</div>
           <div className="flex gap-4">
             {footer.socials.map((s) => (
               <a key={s.label} href={s.href} className="hover:text-matte-blue-end">{s.label}</a>

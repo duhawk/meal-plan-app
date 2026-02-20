@@ -24,8 +24,7 @@ function Register({ onRegisterSuccess, onSwitchToLogin }){
             });
 
             if (data?.message) {
-                setMessage(data.message);
-                setTimeout(() => navigate('/login'), 2000);
+                setMessage('Check your email to verify your account before logging in.');
             }
         }
         catch (err) {
@@ -39,7 +38,7 @@ function Register({ onRegisterSuccess, onSwitchToLogin }){
         <div className="w-full max-w-md p-8 space-y-6 bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 shadow-lg">
           <div className="text-center">
             <h2 className="text-3xl font-bold text-text-primary">Create your account</h2>
-            <p className="text-text-secondary mt-2">Join Fraternity Meals to start planning.</p>
+            <p className="text-text-secondary mt-2">Join Ordo to start planning.</p>
           </div>
 
           {message && <p className="text-green-600 text-sm text-center">{message}</p>}
@@ -63,6 +62,10 @@ function Register({ onRegisterSuccess, onSwitchToLogin }){
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-text-secondary">Password</label>
               <input id="password" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary dark:bg-white dark:text-gray-900" autoComplete="new-password" />
+            </div>
+            <div>
+              <label htmlFor="accessCode" className="block text-sm font-medium text-text-secondary">Access Code</label>
+              <input id="accessCode" type="text" value={accessCode} onChange={(e)=>setAccessCode(e.target.value)} className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary dark:bg-white dark:text-gray-900" autoComplete="off" placeholder="Ask your house president" />
             </div>
             <Button type="submit" className="w-full">Create Account</Button>
             <div className="text-sm text-center text-text-secondary">
