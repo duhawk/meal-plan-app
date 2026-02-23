@@ -1,4 +1,5 @@
 
+import { useState, useEffect } from 'react';
 import { Calendar, Star, CheckCircle, Users } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { Link } from 'react-router-dom';
@@ -6,16 +7,21 @@ import { BASE_URL } from '../lib/api';
 import Button from './ui/Button';
 import StarRating from './StarRating';
 
-export default function MealCard({ meal, onAttend, onReview, onLatePlate }) {
+export default function MealCard({ meal, onAttend, onReview, onLatePlate, onCancelLatePlate }) {
   const { user } = useUser();
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   const mealDate = new Date(meal.meal_date);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const isPast = mealDate < now;
 
-  const isToday = mealDate.toDateString() === today.toDateString();
-  const isPast = mealDate < today;
-
-  const imageUrl = meal.image_url ? `${BASE_URL}${meal.image_url}` : null;
+  const imageUrl = meal.image_url
+    ? meal.image_url.startsWith('http') ? meal.image_url : `${BASE_URL}${meal.image_url}`
+    : null;
 
   const mealTypeBadge = meal.meal_type === 'Lunch'
     ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
@@ -74,9 +80,15 @@ export default function MealCard({ meal, onAttend, onReview, onLatePlate }) {
             <Star size={16} className="mr-2" />
             {meal.user_review ? 'Edit Review' : 'Review'}
           </Button>
-          <Button onClick={onLatePlate} disabled={isPast} variant="secondary" className="w-full sm:w-auto">
-            Late Plate
-          </Button>
+          {meal.has_late_plate ? (
+            <Button onClick={onCancelLatePlate} disabled={isPast} variant="secondary" className="w-full sm:w-auto text-green-700 border-green-500 bg-green-50 hover:bg-red-50 hover:text-red-600 hover:border-red-400 dark:bg-green-900/40 dark:text-green-300 dark:border-green-600 dark:hover:bg-red-900/40 dark:hover:text-red-300 dark:hover:border-red-600">
+              ✓ Late Plate Requested
+            </Button>
+          ) : (
+            <Button onClick={onLatePlate} disabled={isPast} variant="secondary" className="w-full sm:w-auto">
+              Late Plate
+            </Button>
+          )}
           {user?.is_admin && (
             <Link to={`/app/admin/edit-meal/${meal.id}`}>
               <Button variant="secondary" className="w-full sm:w-auto">Edit</Button>

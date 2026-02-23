@@ -21,12 +21,18 @@ export default function AdminLatePlates() {
       setLoading(true);
       const data = await api('/api/admin/late-plates/today');
       const grouped = data.late_plates.reduce((acc, plate) => {
-        const key = plate.meal_dish_name || 'Unknown Meal';
+        const key = `${plate.meal_date}__${plate.meal_dish_name || 'Unknown Meal'}`;
         if (!acc[key]) acc[key] = [];
         acc[key].push(plate);
         return acc;
       }, {});
-      setLatePlatesByMeal(grouped);
+      // Sort groups by meal date (already sorted by backend, but ensure order)
+      const sorted = Object.fromEntries(
+        Object.entries(grouped).sort(([, a], [, b]) =>
+          new Date(a[0].meal_date) - new Date(b[0].meal_date)
+        )
+      );
+      setLatePlatesByMeal(sorted);
     } catch (err) {
       setError(err.message || 'Failed to fetch late plate requests.');
     } finally {
@@ -70,16 +76,16 @@ export default function AdminLatePlates() {
 
   return (
     <div className="bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 shadow-lg p-6 dark:bg-slate-800/80 dark:border-slate-700">
-      <h2 className="text-2xl font-bold text-text-primary mb-4 dark:text-white">Today's Late Plate Requests</h2>
+      <h2 className="text-2xl font-bold text-text-primary mb-4 dark:text-white">Upcoming Late Plate Requests</h2>
       {Object.keys(latePlatesByMeal).length === 0 ? (
-        <p className="text-text-secondary dark:text-gray-400">No late plate requests for today.</p>
+        <p className="text-text-secondary dark:text-gray-400">No upcoming late plate requests.</p>
       ) : (
         <div className="space-y-4">
-          {Object.entries(latePlatesByMeal).map(([mealName, plates]) => (
-            <details key={mealName} className="p-4 bg-white/50 dark:bg-slate-700/50 rounded-lg border border-border-light dark:border-slate-700 group">
+          {Object.entries(latePlatesByMeal).map(([key, plates]) => (
+            <details key={key} className="p-4 bg-white/50 dark:bg-slate-700/50 rounded-lg border border-border-light dark:border-slate-700 group">
               <summary className="flex justify-between items-center cursor-pointer">
                 <h3 className="font-semibold text-lg text-text-primary dark:text-white">
-                  {mealName}
+                  {plates[0]?.meal_dish_name || 'Unknown Meal'}
                   {plates[0]?.meal && (
                     <span className="ml-2 text-sm font-normal text-text-secondary dark:text-gray-400">
                       ({plates[0].meal.meal_type} · {new Date(plates[0].meal.meal_date).toLocaleDateString(undefined, { weekday: 'long' })})

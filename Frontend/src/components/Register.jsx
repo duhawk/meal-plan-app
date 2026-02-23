@@ -65,7 +65,7 @@ function Register({ onRegisterSuccess, onSwitchToLogin }){
             </div>
             <div>
               <label htmlFor="accessCode" className="block text-sm font-medium text-text-secondary">Access Code</label>
-              <input id="accessCode" type="text" value={accessCode} onChange={(e)=>setAccessCode(e.target.value)} className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary dark:bg-white dark:text-gray-900" autoComplete="off" placeholder="Ask your house president" />
+              <input id="accessCode" type="text" value={accessCode} onChange={(e)=>setAccessCode(e.target.value)} className="input mt-1 w-full bg-white/50 border-border-light rounded-lg text-text-primary dark:bg-white dark:text-gray-900" autoComplete="off" placeholder="Enter access code" />
             </div>
             <Button type="submit" className="w-full">Create Account</Button>
             <div className="text-sm text-center text-text-secondary">

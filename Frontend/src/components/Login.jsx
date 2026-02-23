@@ -37,7 +37,7 @@ export default function Login() {
       <div className="w-full max-w-sm p-8 space-y-6 bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 shadow-lg">
         <div className="text-center">
           <h2 className="text-3xl font-bold text-text-primary">Welcome back</h2>
-          <p className="text-text-secondary mt-2">Sign in to continue to Fraternity Meals.</p>
+          <p className="text-text-secondary mt-2">Sign in to continue to Ordo.</p>
         </div>
         
         {error && <p className="text-red-500 text-sm text-center">{error}</p>}
@@ -80,15 +80,22 @@ export default function Login() {
           </div>
           <Button type="submit" className="w-full">Sign In</Button>
         </form>
-        <div className="text-sm text-center text-text-secondary">
-          <Link to="/" className="font-medium text-primary hover:underline">
-            Back to Home
-          </Link>
-          <span className="mx-2">|</span>
-          Don't have an account?{' '}
-          <Link to="/register" className="font-medium text-primary hover:underline">
-            Sign up
-          </Link>
+        <div className="text-sm text-center text-text-secondary space-y-2">
+          <div>
+            <Link to="/forgot-password" className="font-medium text-primary hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+          <div>
+            <Link to="/" className="font-medium text-primary hover:underline">
+              Back to Home
+            </Link>
+            <span className="mx-2">|</span>
+            Don't have an account?{' '}
+            <Link to="/register" className="font-medium text-primary hover:underline">
+              Sign up
+            </Link>
+          </div>
         </div>
       </div>
     </div>

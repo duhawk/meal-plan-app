@@ -185,10 +185,21 @@ export default function WeeklyMenu() {
                           meal={m}
                           onReview={() => { setActiveMeal(m); setShowReview(true); setSuccess(""); }}
                           onLatePlate={() => { setActiveMeal(m); setShowLatePlate(true); setLateNotes(""); setLatePickupTime(""); setSuccess(""); }}
+                          onCancelLatePlate={async () => {
+                            try {
+                              await api(`/api/meals/${m.id}/late-plates`, { method: 'DELETE' });
+                              setMeals(cur => cur.map(meal => meal.id === m.id ? { ...meal, has_late_plate: false } : meal));
+                              setSuccess('Late plate request cancelled.');
+                            } catch (e) { setErr(e.message); }
+                          }}
                           onAttend={async () => {
                             try {
+                              // Toggling ON attendance — cancel any late plate first
+                              if (!m.is_attending && m.has_late_plate) {
+                                await api(`/api/meals/${m.id}/late-plates`, { method: 'DELETE' });
+                              }
                               const data = await api(`/api/meals/${m.id}/attendance`, { method: 'POST' });
-                              setMeals(cur => cur.map(meal => meal.id === m.id ? { ...meal, is_attending: data.is_attending } : meal));
+                              setMeals(cur => cur.map(meal => meal.id === m.id ? { ...meal, is_attending: data.is_attending, has_late_plate: data.is_attending ? false : meal.has_late_plate } : meal));
                               setSuccess(data.message);
                             } catch (e) { setErr(e.message); }
                           }}
@@ -252,10 +263,15 @@ export default function WeeklyMenu() {
             e.preventDefault();
             if (!activeMeal) return;
             try {
+              // If attending, toggle off attendance first
+              if (activeMeal.is_attending) {
+                await api(`/api/meals/${activeMeal.id}/attendance`, { method: 'POST' });
+              }
               await api(`/api/meals/${activeMeal.id}/late-plates`, {
                 method: 'POST',
                 body: { notes: lateNotes || undefined, pickup_time: latePickupTime || undefined },
               });
+              setMeals(cur => cur.map(m => m.id === activeMeal.id ? { ...m, has_late_plate: true, is_attending: false } : m));
               setShowLatePlate(false);
               setSuccess('Late plate requested. We got you covered.');
             } catch (e) {

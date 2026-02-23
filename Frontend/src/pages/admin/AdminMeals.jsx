@@ -128,6 +128,24 @@ export default function AdminMeals() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const handleClearWeek = async () => {
+    const dateStr = prompt("Enter any date in the week to clear (YYYY-MM-DD):", new Date().toISOString().slice(0, 10));
+    if (!dateStr) return;
+    if (!window.confirm(`This will permanently delete all meals for the week containing ${dateStr}. Are you sure?`)) return;
+    setClearing(true);
+    setError('');
+    setSuccess('');
+    try {
+      const data = await api('/api/meals/week', { method: 'DELETE', body: { date: dateStr } });
+      setSuccess(data.message || 'Week cleared.');
+    } catch (err) {
+      setError(err.message || 'Failed to clear week.');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const handleGenerateWeek = () => {
     const startDateStr = prompt("Enter the start date for the week (YYYY-MM-DD, treated as Sunday):", new Date().toISOString().slice(0, 10));
@@ -210,7 +228,12 @@ export default function AdminMeals() {
           <h2 className="text-2xl font-bold text-text-primary mb-1 dark:text-white">Weekly Meal Creation</h2>
           <p className="text-text-secondary mb-6 dark:text-gray-400">Generate slots for the week and fill in the details.</p>
         </div>
-        <Button onClick={handleGenerateWeek}>Generate Weekly Menu</Button>
+        <div className="flex gap-2">
+          <Button onClick={handleClearWeek} disabled={clearing} variant="secondary" className="text-red-500 border-red-300 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950">
+            {clearing ? 'Clearing...' : 'Clear Week'}
+          </Button>
+          <Button onClick={handleGenerateWeek}>Generate Weekly Menu</Button>
+        </div>
       </div>
 
       {error && <div className="mb-4 text-red-500 text-sm">{error}</div>}

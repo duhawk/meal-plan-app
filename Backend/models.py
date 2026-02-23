@@ -34,6 +34,7 @@ class User(db.Model):
     reviews = db.relationship('Review', backref='user', lazy=True, cascade="all, delete-orphan")
     late_plates = db.relationship('LatePlate', backref='user', lazy=True, cascade="all, delete-orphan")
     eaten_meals = db.relationship('MealAttendance', backref='user', lazy=True, cascade='all, delete-orphan')
+    weekly_presets = db.relationship('WeeklyPreset', backref='user', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<User {self.email}>'
@@ -105,6 +106,24 @@ class MealAttendance(db.Model):
 
     def __repr__(self):
         return f'<MealAttendance {self.id} by User {self.user_id} for Meal {self.meal_id}>'
+
+
+class WeeklyPreset(db.Model):
+    __tablename__ = 'weekly_presets'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    day_of_week = db.Column(db.Integer, nullable=False)  # 0=Mon, 6=Sun
+    meal_type = db.Column(db.String(15), nullable=False)  # 'Lunch' or 'Dinner'
+    attending = db.Column(db.Boolean, default=True, nullable=False)
+    late_plate = db.Column(db.Boolean, default=False, nullable=False)
+    late_plate_notes = db.Column(db.Text, nullable=True)
+    late_plate_pickup_time = db.Column(db.Time, nullable=True)
+    enabled = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=db.func.now())
+    __table_args__ = (db.UniqueConstraint('user_id', 'day_of_week', 'meal_type', name='user_day_meal_uc'),)
+
+    def __repr__(self):
+        return f'<WeeklyPreset user={self.user_id} day={self.day_of_week} {self.meal_type}>'
 
 
 class Recommendation(db.Model):

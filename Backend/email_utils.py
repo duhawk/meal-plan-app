@@ -1,7 +1,7 @@
 import resend
 import os
 
-FROM_EMAIL = 'Ordo <onboarding@resend.dev>'
+FROM_EMAIL = 'Ordo <noreply@ordodining.com>'
 
 
 def _init():

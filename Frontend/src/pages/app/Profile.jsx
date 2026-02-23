@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { api } from '../../lib/api';
 import { useUser } from '../../contexts/UserContext';
 import Button from '../../components/ui/Button';
+import WeeklyPresets from '../../components/WeeklyPresets';
 
 export default function Profile() {
   const { user, login } = useUser();
+  const [tab, setTab] = useState('profile');
   const [firstName, setFirstName] = useState(user?.first_name || '');
   const [lastName, setLastName] = useState(user?.last_name || '');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -53,13 +55,29 @@ export default function Profile() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-white">Profile</h1>
-        <p className="text-text-secondary mt-1 dark:text-gray-400">Update your name and password.</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 p-6 space-y-5 dark:bg-slate-800/80 dark:border-slate-700">
+      <div className="flex gap-6 border-b border-border-light dark:border-slate-700">
+        <button
+          onClick={() => setTab('profile')}
+          className={`pb-2 text-sm font-medium transition-colors ${tab === 'profile' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary dark:text-gray-400 hover:text-text-primary'}`}
+        >
+          Profile
+        </button>
+        <button
+          onClick={() => setTab('presets')}
+          className={`pb-2 text-sm font-medium transition-colors ${tab === 'presets' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary dark:text-gray-400 hover:text-text-primary'}`}
+        >
+          Weekly Defaults
+        </button>
+      </div>
+
+      {tab === 'presets' ? <WeeklyPresets /> : null}
+
+      {tab === 'profile' && <form onSubmit={handleSubmit} className="bg-surface/80 backdrop-blur-lg rounded-xl border border-border-light/50 p-6 space-y-5 dark:bg-slate-800/80 dark:border-slate-700">
         {success && (
           <div className="rounded-lg border border-green-700 bg-green-50 px-4 py-3 text-sm text-green-700">
             {success}
@@ -135,7 +153,7 @@ export default function Profile() {
             {submitting ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
-      </form>
+      </form>}
     </div>
   );
 }

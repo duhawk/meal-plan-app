@@ -27,7 +27,9 @@ export default function EditMeal() {
         setMeal(mealData);
         setDishName(mealData.dish_name);
         setDescription(mealData.description || '');
-        setMealDate(new Date(mealData.meal_date).toISOString().slice(0, 16));
+        const d = new Date(mealData.meal_date);
+        const pad = n => String(n).padStart(2, '0');
+        setMealDate(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`);
         setMealType(mealData.meal_type);
         setExistingImageUrl(mealData.image_url);
       } catch (err) {
@@ -50,7 +52,8 @@ export default function EditMeal() {
     setSuccess('');
 
     const formData = new FormData();
-    formData.append('meal_date', new Date(mealDate).toISOString());
+    const hour = mealType === 'Lunch' ? '12' : '17';
+    formData.append('meal_date', new Date(`${mealDate}T${hour}:00:00`).toISOString());
     formData.append('meal_type', mealType);
     formData.append('dish_name', dishName);
     formData.append('description', description);
@@ -103,8 +106,8 @@ export default function EditMeal() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="mealDate" className="block text-sm font-medium text-text-secondary dark:text-gray-400">Date & Time</label>
-            <input type="datetime-local" id="mealDate" value={mealDate} onChange={(e) => setMealDate(e.target.value)} required className="input mt-1 w-full bg-white/90 border-gray-300 rounded-lg text-text-primary dark:bg-slate-700 dark:border-slate-600 dark:text-white" style={{ colorScheme: 'dark' }} />
+            <label htmlFor="mealDate" className="block text-sm font-medium text-text-secondary dark:text-gray-400">Date</label>
+            <input type="date" id="mealDate" value={mealDate} onChange={(e) => setMealDate(e.target.value)} required className="input mt-1 w-full bg-white/90 border-gray-300 rounded-lg text-text-primary dark:bg-slate-700 dark:border-slate-600 dark:text-white" style={{ colorScheme: 'dark' }} />
           </div>
           <div>
             <label htmlFor="mealType" className="block text-sm font-medium text-text-secondary dark:text-gray-400">Meal Type</label>

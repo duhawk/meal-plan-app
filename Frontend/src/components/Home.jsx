@@ -23,7 +23,9 @@ export default function Home() {
     setLoading(true);
     setErr('');
     try {
-      const data = await api('/api/today-meals');
+      const now = new Date();
+      const localDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const data = await api(`/api/today-meals?date=${localDate}`);
       const raw = Array.isArray(data?.meals) ? data.meals : [];
       // Ensure Lunch appears before Dinner
       raw.sort((a, b) => {
@@ -95,10 +97,17 @@ export default function Home() {
     e.preventDefault();
     if (!activeMeal) return;
     try {
+      // If attending, toggle off attendance first
+      if (activeMeal.is_attending) {
+        await api(`/api/meals/${activeMeal.id}/attendance`, { method: 'POST' });
+      }
       await api(`/api/meals/${activeMeal.id}/late-plates`, {
         method: 'POST',
         body: { notes: lateNotes || undefined, pickup_time: latePickupTime || undefined },
       });
+      setMeals((current) =>
+        current.map((m) => m.id === activeMeal.id ? { ...m, has_late_plate: true, is_attending: false } : m)
+      );
       setShowLatePlate(false);
       setSuccess('Late plate requested. We got you covered.');
     } catch (e) {
@@ -156,12 +165,27 @@ export default function Home() {
                     setSuccess('');
                     setErr('');
                   }}
+                  onCancelLatePlate={async () => {
+                    try {
+                      await api(`/api/meals/${meal.id}/late-plates`, { method: 'DELETE' });
+                      setMeals((current) =>
+                        current.map((m) => m.id === meal.id ? { ...m, has_late_plate: false } : m)
+                      );
+                      setSuccess('Late plate request cancelled.');
+                    } catch (e) {
+                      setErr(e.message);
+                    }
+                  }}
                   onAttend={async () => {
                     try {
+                      // Toggling ON attendance — cancel any late plate first
+                      if (!meal.is_attending && meal.has_late_plate) {
+                        await api(`/api/meals/${meal.id}/late-plates`, { method: 'DELETE' });
+                      }
                       const data = await api(`/api/meals/${meal.id}/attendance`, { method: 'POST' });
                       setMeals((current) =>
                         current.map((m) =>
-                          m.id === meal.id ? { ...m, is_attending: data.is_attending } : m
+                          m.id === meal.id ? { ...m, is_attending: data.is_attending, has_late_plate: data.is_attending ? false : m.has_late_plate } : m
                         )
                       );
                       setSuccess(data.message);

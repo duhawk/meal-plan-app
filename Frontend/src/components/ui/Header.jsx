@@ -11,8 +11,8 @@ export default function Header() {
     <header className="sticky top-0 z-40 bg-surface/80 backdrop-blur-lg border-b border-border-light/50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex items-center gap-3">
         <Link to="/" className="flex items-center gap-2 ml-4">
-          <img src={`${BASE_URL}/uploads/lightmode_logo.png`} alt="Logo" className="h-10 w-10 rounded-full object-cover dark:hidden" />
-          <img src={`${BASE_URL}/uploads/darkmode_logo.png`} alt="Logo" className="h-10 w-10 rounded-full object-cover hidden dark:block" />
+          <img src="https://ordo-meal-images.s3.us-east-1.amazonaws.com/lightmode_logo.png" alt="Logo" className="h-10 w-10 rounded-full object-cover dark:hidden" />
+          <img src="https://ordo-meal-images.s3.us-east-1.amazonaws.com/darkmode_logo.png" alt="Logo" className="h-10 w-10 rounded-full object-cover hidden dark:block" />
           <div className="text-base sm:text-lg font-bold tracking-tight text-text-primary">Ordo</div>
         </Link>
         <nav className="hidden md:flex items-center gap-6 ml-6 text-sm text-text-secondary">

@@ -72,8 +72,8 @@ CORS(
         "http://127.0.0.1:5174",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "https://yourdomain.com",       # TODO: replace with real domain
-        "https://www.yourdomain.com",   # TODO: replace with real domain
+        "https://ordodining.com",
+        "https://www.ordodining.com",
     ],
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
@@ -87,7 +87,7 @@ migrate = Migrate(app, db)
 from flask_marshmallow import Marshmallow
 ma = Marshmallow(app)
 
-from models import User, Meal, Review, LatePlate, MealAttendance, Recommendation, HouseSettings, Chapter, PendingRegistration
+from models import User, Meal, Review, LatePlate, MealAttendance, Recommendation, HouseSettings, Chapter, PendingRegistration, WeeklyPreset
 
 class UserSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
@@ -111,6 +111,32 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def apply_preset_to_meal(meal, user, attendance=None):
+    preset = WeeklyPreset.query.filter_by(
+        user_id=user.id,
+        day_of_week=meal.meal_date.weekday(),
+        meal_type=meal.meal_type,
+        enabled=True
+    ).first()
+    if not preset:
+        return
+    if not preset.attending:
+        # Remove the attendance record — user's preset says they won't attend
+        if attendance:
+            db.session.delete(attendance)
+    # Apply late plate regardless of attendance status
+    if preset.late_plate:
+        existing = LatePlate.query.filter_by(user_id=user.id, meal_id=meal.id).first()
+        if not existing:
+            db.session.add(LatePlate(
+                meal_id=meal.id,
+                user_id=user.id,
+                notes=preset.late_plate_notes,
+                pickup_time=preset.late_plate_pickup_time,
+                status='pending',
+                request_date=datetime.now(timezone.utc).date()
+            ))
 
 def jwt_required(f):
     @wraps(f)
@@ -338,12 +364,17 @@ def _enrich_meals(meals_with_counts, user_id):
         for ma in MealAttendance.query.filter_by(user_id=user_id).all()
     }
 
+    user_late_plates = {
+        lp.meal_id: lp.id
+        for lp in LatePlate.query.filter_by(user_id=user_id).all()
+    }
+
     result = []
     for meal, attendance_count in meals_with_counts:
         stats = review_stats.get(meal.id, {'avg_rating': None, 'review_count': 0})
         result.append({
             'id': meal.id,
-            'meal_date': meal.meal_date.isoformat(),
+            'meal_date': meal.meal_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
             'meal_type': meal.meal_type,
             'dish_name': meal.dish_name,
             'description': meal.description,
@@ -355,6 +386,7 @@ def _enrich_meals(meals_with_counts, user_id):
             'review_count': stats['review_count'],
             'user_review': user_reviews.get(meal.id),
             'late_plate_hours_before': meal.late_plate_hours_before,
+            'has_late_plate': meal.id in user_late_plates,
         })
     return result
 
@@ -369,7 +401,12 @@ def get_today_meals():
             func.count(MealAttendance.id).label('attendance_count')
         ).group_by(MealAttendance.meal_id).subquery()
 
-        today = datetime.now().date()
+        date_str = request.args.get('date')
+        try:
+            from datetime import date as date_type
+            today = date_type.fromisoformat(date_str) if date_str else datetime.now().date()
+        except Exception:
+            today = datetime.now().date()
 
         meals = db.session.query(
             Meal,
@@ -511,7 +548,7 @@ def add_meal():
                 filename = secure_filename(file.filename)
                 # Ensure a unique filename for S3, e.g., using UUID
                 import uuid
-                unique_filename = f"{uuid.uuid4()}-{filename}"
+                unique_filename = f"uploads/{uuid.uuid4()}-{filename}"
                 s3_image_url = upload_file_to_s3(file, unique_filename)
                 if s3_image_url:
                     image_url = s3_image_url
@@ -545,6 +582,7 @@ def add_meal():
         for user in all_users:
             new_attendance = MealAttendance(meal_id=new_meal.id, user_id=user.id)
             db.session.add(new_attendance)
+            apply_preset_to_meal(new_meal, user, new_attendance)
 
         db.session.commit()
         return jsonify({'message': 'Meal added successfully.'}), 201
@@ -699,6 +737,21 @@ def request_late_plate(meal_id):
         print(f"Error requesting late plate: {e}")
         return jsonify({'error': 'Failed to request late plate.'}), 500
     
+@app.route('/api/meals/<int:meal_id>/late-plates', methods=['DELETE'])
+@jwt_required
+def cancel_late_plate(meal_id):
+    user_id = g.current_user.id
+    try:
+        lp = LatePlate.query.filter_by(user_id=user_id, meal_id=meal_id).first()
+        if not lp:
+            return jsonify({'error': 'No late plate request found.'}), 404
+        db.session.delete(lp)
+        db.session.commit()
+        return jsonify({'message': 'Late plate request cancelled.'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to cancel late plate.'}), 500
+
 @app.route('/api/meals/<int:meal_id>/attendance', methods=['POST'])
 @jwt_required
 def mark_attendance(meal_id):
@@ -850,7 +903,7 @@ def get_meal(meal_id):
         
         return jsonify({
             'id': meal.id,
-            'meal_date': meal.meal_date.isoformat(),
+            'meal_date': meal.meal_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
             'meal_type': meal.meal_type,
             'dish_name': meal.dish_name,
             'description': meal.description,
@@ -942,7 +995,7 @@ def update_meal(meal_id):
             file = request.files['image']
             if file and file.filename != '' and allowed_file(file.filename):
                 import uuid
-                unique_filename = f"{uuid.uuid4()}-{secure_filename(file.filename)}"
+                unique_filename = f"uploads/{uuid.uuid4()}-{secure_filename(file.filename)}"
                 s3_image_url = upload_file_to_s3(file, unique_filename)
                 if s3_image_url:
                     image_url = s3_image_url
@@ -962,6 +1015,36 @@ def update_meal(meal_id):
         print(f"Error updating meal {meal_id}: {e}")
         return jsonify({'error': 'Failed to update meal.'}), 500
     
+@app.route('/api/meals/week', methods=['DELETE'])
+@admin_required
+def clear_week_meals():
+    data = request.get_json(silent=True) or {}
+    date_str = data.get('date')
+    if not date_str:
+        return jsonify({'error': 'date is required (YYYY-MM-DD)'}), 400
+    try:
+        from datetime import date as date_type, timedelta
+        d = date_type.fromisoformat(date_str)
+        # Find Sunday that starts the meal week (same logic as AdminMeals.jsx)
+        days_since_sunday = (d.weekday() + 1) % 7
+        sunday = d - timedelta(days=days_since_sunday)
+        saturday = sunday + timedelta(days=6)
+        chapter_id = g.current_user.chapter_id
+        meals = Meal.query.filter(
+            Meal.chapter_id == chapter_id,
+            Meal.meal_date >= datetime.combine(sunday, datetime.min.time()),
+            Meal.meal_date <= datetime.combine(saturday, datetime.max.time()),
+        ).all()
+        count = len(meals)
+        for meal in meals:
+            db.session.delete(meal)
+        db.session.commit()
+        return jsonify({'message': f'{count} meal(s) cleared for that week.', 'count': count})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error clearing week meals: {e}")
+        return jsonify({'error': 'Failed to clear meals.'}), 500
+
 @app.route('/api/meals/<int:meal_id>', methods=['DELETE'])
 @admin_required
 def delete_meal(meal_id):
@@ -1127,10 +1210,9 @@ def get_today_late_plates():
             joinedload(LatePlate.user),
             joinedload(LatePlate.meal)
         ).join(Meal, LatePlate.meal_id == Meal.id).filter(
-            db.func.date(LatePlate.request_date) == today.date(),
-            db.func.date(Meal.meal_date) >= today.date(),
+            Meal.meal_date >= today,
             Meal.chapter_id == g.current_user.chapter_id
-        ).order_by(LatePlate.request_time.desc()).all()
+        ).order_by(Meal.meal_date.asc(), LatePlate.request_time.asc()).all()
 
         late_plates_data = [{
             'id': lp.id,
@@ -1158,12 +1240,12 @@ def get_today_late_plates():
 @admin_required
 def get_pending_late_plate_count():
     try:
-        today = datetime.now().date()
+        now = datetime.now()
         count = db.session.query(func.count(LatePlate.id)).join(
             Meal, LatePlate.meal_id == Meal.id
         ).filter(
             LatePlate.status == 'pending',
-            db.cast(LatePlate.request_date, db.Date) == today,
+            Meal.meal_date >= now,
             Meal.chapter_id == g.current_user.chapter_id
         ).scalar() or 0
         return jsonify({'count': count}), 200
@@ -1361,9 +1443,14 @@ def update_access_code():
     try:
         import secrets
         import string
-        chapter = Chapter.query.get(g.current_user.chapter_id)
+        chapter = Chapter.query.get(g.current_user.chapter_id) if g.current_user.chapter_id else None
         if not chapter:
-            return jsonify({'error': 'Chapter not found.'}), 404
+            chapter = Chapter.query.first()
+        if not chapter:
+            chapter = Chapter(name='Default')
+            db.session.add(chapter)
+            db.session.flush()
+            g.current_user.chapter_id = chapter.id
 
         data = request.get_json(silent=True)
         new_code = (data.get('code', '') if data else '').strip()
@@ -1517,7 +1604,7 @@ def add_bulk_meals():
                 if file and file.filename != '' and allowed_file(file.filename):
                     filename = secure_filename(file.filename)
                     import uuid
-                    unique_filename = f"{uuid.uuid4()}-{filename}"
+                    unique_filename = f"uploads/{uuid.uuid4()}-{filename}"
                     s3_image_url = upload_file_to_s3(file, unique_filename)
                     if s3_image_url:
                         image_url = s3_image_url
@@ -1547,6 +1634,7 @@ def add_bulk_meals():
             for user in all_users:
                 new_attendance = MealAttendance(meal_id=meal.id, user_id=user.id)
                 db.session.add(new_attendance)
+                apply_preset_to_meal(meal, user, new_attendance)
 
         print("Committing transaction...")
         db.session.commit()
@@ -1625,6 +1713,142 @@ def cleanup_old_late_plates():
 scheduler = BackgroundScheduler()
 scheduler.add_job(cleanup_old_late_plates, 'cron', hour=0, minute=0)
 scheduler.start()
+
+# --- Weekly Presets ---
+
+@app.route('/api/weekly-presets', methods=['GET'])
+@jwt_required
+def get_weekly_presets():
+    presets = WeeklyPreset.query.filter_by(user_id=g.current_user.id).all()
+    return jsonify([{
+        'id': p.id,
+        'day_of_week': p.day_of_week,
+        'meal_type': p.meal_type,
+        'attending': p.attending,
+        'late_plate': p.late_plate,
+        'late_plate_notes': p.late_plate_notes,
+        'late_plate_pickup_time': str(p.late_plate_pickup_time) if p.late_plate_pickup_time else None,
+        'enabled': p.enabled,
+    } for p in presets])
+
+@app.route('/api/weekly-presets', methods=['POST'])
+@jwt_required
+def create_weekly_preset():
+    data = request.get_json(silent=True) or {}
+    day_of_week = data.get('day_of_week')
+    meal_type = data.get('meal_type')
+    if day_of_week is None or meal_type not in ('Lunch', 'Dinner'):
+        return jsonify({'error': 'day_of_week and meal_type (Lunch or Dinner) are required.'}), 400
+    if not (0 <= int(day_of_week) <= 6):
+        return jsonify({'error': 'day_of_week must be 0-6.'}), 400
+    existing = WeeklyPreset.query.filter_by(user_id=g.current_user.id, day_of_week=day_of_week, meal_type=meal_type).first()
+    if existing:
+        return jsonify({'error': 'Preset already exists for this day and meal type.'}), 409
+    pickup = data.get('late_plate_pickup_time')
+    from datetime import time as time_type
+    pickup_time = None
+    if pickup:
+        try:
+            h, m = pickup.split(':')[:2]
+            pickup_time = time_type(int(h), int(m))
+        except Exception:
+            pass
+    preset = WeeklyPreset(
+        user_id=g.current_user.id,
+        day_of_week=int(day_of_week),
+        meal_type=meal_type,
+        attending=data.get('attending', True),
+        late_plate=data.get('late_plate', False),
+        late_plate_notes=data.get('late_plate_notes'),
+        late_plate_pickup_time=pickup_time,
+        enabled=data.get('enabled', True),
+    )
+    db.session.add(preset)
+    db.session.commit()
+    return jsonify({'message': 'Preset created.', 'id': preset.id}), 201
+
+@app.route('/api/weekly-presets/<int:preset_id>', methods=['PUT'])
+@jwt_required
+def update_weekly_preset(preset_id):
+    preset = WeeklyPreset.query.get(preset_id)
+    if not preset or preset.user_id != g.current_user.id:
+        return jsonify({'error': 'Not found.'}), 404
+    data = request.get_json(silent=True) or {}
+    if 'attending' in data:
+        preset.attending = data['attending']
+    if 'late_plate' in data:
+        preset.late_plate = data['late_plate']
+    if 'late_plate_notes' in data:
+        preset.late_plate_notes = data['late_plate_notes']
+    if 'late_plate_pickup_time' in data:
+        pickup = data['late_plate_pickup_time']
+        from datetime import time as time_type
+        if pickup:
+            try:
+                h, m = pickup.split(':')[:2]
+                preset.late_plate_pickup_time = time_type(int(h), int(m))
+            except Exception:
+                preset.late_plate_pickup_time = None
+        else:
+            preset.late_plate_pickup_time = None
+    if 'enabled' in data:
+        preset.enabled = data['enabled']
+    db.session.commit()
+    return jsonify({'message': 'Preset updated.'})
+
+@app.route('/api/weekly-presets/<int:preset_id>', methods=['DELETE'])
+@jwt_required
+def delete_weekly_preset(preset_id):
+    preset = WeeklyPreset.query.get(preset_id)
+    if not preset or preset.user_id != g.current_user.id:
+        return jsonify({'error': 'Not found.'}), 404
+    db.session.delete(preset)
+    db.session.commit()
+    return jsonify({'message': 'Preset deleted.'})
+
+@app.route('/api/weekly-presets/apply', methods=['POST'])
+@jwt_required
+def apply_weekly_presets():
+    from datetime import date, timedelta
+    user = g.current_user
+    today = date.today()
+    end_date = today + timedelta(days=7)
+    week_meals = Meal.query.filter(
+        Meal.chapter_id == user.chapter_id,
+        Meal.meal_date >= datetime.combine(today, datetime.min.time()),
+        Meal.meal_date <= datetime.combine(end_date, datetime.max.time()),
+    ).all()
+    count = 0
+    for meal in week_meals:
+        preset = WeeklyPreset.query.filter_by(
+            user_id=user.id,
+            day_of_week=meal.meal_date.weekday(),
+            meal_type=meal.meal_type,
+            enabled=True
+        ).first()
+        if not preset:
+            continue
+        att = MealAttendance.query.filter_by(user_id=user.id, meal_id=meal.id).first()
+        if preset.attending:
+            if not att:
+                db.session.add(MealAttendance(meal_id=meal.id, user_id=user.id))
+        else:
+            if att:
+                db.session.delete(att)
+        # Apply late plate regardless of attendance status
+        if preset.late_plate:
+            existing = LatePlate.query.filter_by(user_id=user.id, meal_id=meal.id).first()
+            if not existing:
+                db.session.add(LatePlate(
+                    meal_id=meal.id, user_id=user.id,
+                    notes=preset.late_plate_notes,
+                    pickup_time=preset.late_plate_pickup_time,
+                    status='pending',
+                    request_date=today
+                ))
+        count += 1
+    db.session.commit()
+    return jsonify({'message': f'Presets applied to {count} meal(s) this week.'})
 
 @app.cli.command("make-admin")
 @click.argument("email")

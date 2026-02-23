@@ -51,9 +51,9 @@ export default function MobileShell() {
         <div className="mx-auto max-w-screen-sm px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <img src={`${BASE_URL}/uploads/lightmode_logo.png`} alt="Logo" className="h-8 w-8 rounded-full object-cover ml-2 dark:hidden" />
+            <img src="https://ordo-meal-images.s3.us-east-1.amazonaws.com/lightmode_logo.png" alt="Logo" className="h-8 w-8 rounded-full object-cover ml-2 dark:hidden" />
             <div className="h-8 w-8 rounded-full overflow-hidden ml-2 hidden dark:flex items-center justify-center flex-shrink-0">
-              <img src={`${BASE_URL}/uploads/darkmode_logo.png`} alt="Logo" className="w-full h-full object-cover" style={{ objectPosition: 'center 60%', transform: 'scaleY(1.1)' }} />
+              <img src="https://ordo-meal-images.s3.us-east-1.amazonaws.com/darkmode_logo.png" alt="Logo" className="w-full h-full object-cover" style={{ objectPosition: 'center 60%', transform: 'scaleY(1.1)' }} />
             </div>
             <div className="font-bold text-text-primary dark:text-white">Ordo</div>
           </div>
