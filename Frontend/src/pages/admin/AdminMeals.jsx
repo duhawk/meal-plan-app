@@ -19,6 +19,7 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill, onWebImage }) 
   const [imageQuery, setImageQuery] = useState('');
   const [imageResults, setImageResults] = useState([]);
   const [imageSearching, setImageSearching] = useState(false);
+  const [imageSearchError, setImageSearchError] = useState('');
 
   const debouncedSearch = useCallback(
     debounce(async (query) => {
@@ -47,11 +48,14 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill, onWebImage }) 
   const handleImageSearch = async (q) => {
     if (!q.trim()) { setImageResults([]); return; }
     setImageSearching(true);
+    setImageSearchError('');
     try {
       const data = await api(`/api/meals/image-search?q=${encodeURIComponent(q)}`);
       setImageResults(data.photos || []);
-    } catch {
+      if (!data.photos?.length) setImageSearchError('No results found.');
+    } catch (e) {
       setImageResults([]);
+      setImageSearchError(e.message || 'Image search failed. Make sure PEXELS_API_KEY is set on the server.');
     } finally {
       setImageSearching(false);
     }
@@ -174,12 +178,15 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill, onWebImage }) 
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowImageSearch(false); setImageResults([]); }}
+                  onClick={() => { setShowImageSearch(false); setImageResults([]); setImageSearchError(''); }}
                   className="px-2 py-1 bg-slate-200 dark:bg-slate-600 rounded-md text-xs"
                 >
                   <X size={13} />
                 </button>
               </div>
+              {imageSearchError && (
+                <p className="text-xs text-red-500">{imageSearchError}</p>
+              )}
               {imageResults.length > 0 && (
                 <div className="grid grid-cols-3 gap-1 max-h-48 overflow-y-auto">
                   {imageResults.map(photo => (
