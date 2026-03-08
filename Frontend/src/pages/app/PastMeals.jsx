@@ -83,7 +83,12 @@ export default function PastMeals() {
                       <h4 className="font-semibold text-text-primary dark:text-white">Past Occurrences:</h4>
                       {meal.past_occurrences && meal.past_occurrences.map((occurrence) => (
                         <div key={occurrence.id} className="flex items-center justify-between text-sm text-text-secondary dark:text-gray-400">
-                          <span>{new Date(occurrence.date).toLocaleDateString()}</span>
+                          <div className="flex items-center gap-2">
+                            <span>{new Date(occurrence.date).toLocaleDateString()}</span>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${occurrence.meal_type === 'Lunch' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'}`}>
+                              {occurrence.meal_type}
+                            </span>
+                          </div>
                           <div className="flex items-center gap-2">
                             {user?.is_admin && <span>Attendance: {occurrence.attendance}</span>}
                             {user?.is_admin && (

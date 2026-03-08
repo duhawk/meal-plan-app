@@ -80,22 +80,15 @@ export default function Login() {
           </div>
           <Button type="submit" className="w-full">Sign In</Button>
         </form>
-        <div className="text-sm text-center text-text-secondary space-y-2">
-          <div>
-            <Link to="/forgot-password" className="font-medium text-primary hover:underline">
-              Forgot password?
-            </Link>
-          </div>
-          <div>
-            <Link to="/" className="font-medium text-primary hover:underline">
-              Back to Home
-            </Link>
-            <span className="mx-2">|</span>
-            Don't have an account?{' '}
-            <Link to="/register" className="font-medium text-primary hover:underline">
-              Sign up
-            </Link>
-          </div>
+        <div className="text-sm text-center text-text-secondary">
+          <Link to="/" className="font-medium text-primary hover:underline">
+            Back to Home
+          </Link>
+          <span className="mx-2">|</span>
+          Don't have an account?{' '}
+          <Link to="/register" className="font-medium text-primary hover:underline">
+            Sign up
+          </Link>
         </div>
       </div>
     </div>
