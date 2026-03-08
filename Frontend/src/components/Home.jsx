@@ -6,6 +6,7 @@ import MealCard from './MealCard';
 import Modal from './Modal';
 import MealReview from './MealReview';
 import { useUser } from '../contexts/UserContext';
+import { Star } from 'lucide-react';
 
 export default function Home() {
   const [meals, setMeals] = useState([]);
@@ -14,6 +15,7 @@ export default function Home() {
   const [success, setSuccess] = useState('');
   const [activeMeal, setActiveMeal] = useState(null);
   const [showReview, setShowReview] = useState(false);
+  const [pendingReviews, setPendingReviews] = useState([]);
   const [showLatePlate, setShowLatePlate] = useState(false);
   const [lateNotes, setLateNotes] = useState('');
   const [latePickupTime, setLatePickupTime] = useState('');
@@ -41,7 +43,19 @@ export default function Home() {
     }
   };
 
-  useEffect(() => { fetchMeals(); }, []);
+  const fetchPendingReviews = async () => {
+    try {
+      const data = await api('/api/pending-reviews');
+      setPendingReviews(Array.isArray(data?.meals) ? data.meals : []);
+    } catch {
+      // silently ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchMeals();
+    fetchPendingReviews();
+  }, []);
 
   const handleReviewSubmit = async ({ rating, comment }) => {
     if (!activeMeal) return;
@@ -61,6 +75,7 @@ export default function Home() {
       setShowReview(false);
       setSuccess(isEdit ? 'Review updated!' : 'Thanks for the feedback!');
       fetchMeals();
+      fetchPendingReviews();
     } catch (e) {
       setErr(e.message);
     }
@@ -73,6 +88,7 @@ export default function Home() {
       setShowReview(false);
       setSuccess('Review deleted.');
       fetchMeals();
+      fetchPendingReviews();
     } catch (e) {
       setErr(e.message);
     }
@@ -129,6 +145,45 @@ export default function Home() {
         <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-white">Today's Meals</h1>
         <p className="text-text-secondary mt-1 dark:text-gray-400">Here are the meals scheduled for today.</p>
       </div>
+
+      {pendingReviews.length > 0 && (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 dark:border-primary/20 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Star size={16} className="text-primary fill-primary" />
+            <p className="text-sm font-semibold text-primary">
+              {pendingReviews.length === 1
+                ? 'You have 1 meal to review'
+                : `You have ${pendingReviews.length} meals to review`}
+            </p>
+          </div>
+          <div className="space-y-2">
+            {pendingReviews.map(meal => (
+              <div key={meal.id} className="flex items-center justify-between bg-surface/60 dark:bg-slate-800/60 rounded-lg px-3 py-2">
+                <div>
+                  <span className="text-sm font-medium text-text-primary dark:text-white">{meal.dish_name}</span>
+                  <span className={`ml-2 text-xs font-medium px-1.5 py-0.5 rounded-full ${meal.meal_type === 'Lunch' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'}`}>
+                    {meal.meal_type}
+                  </span>
+                  <span className="ml-2 text-xs text-text-secondary dark:text-gray-400">
+                    {new Date(meal.meal_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    setActiveMeal({ ...meal, user_review: null });
+                    setShowReview(true);
+                    setSuccess('');
+                    setErr('');
+                  }}
+                  className="text-xs font-medium text-primary hover:underline ml-3 shrink-0"
+                >
+                  Write Review
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {success && (
         <div className="rounded-lg border border-green-700 bg-green-50 px-4 py-3 text-sm text-green-700">

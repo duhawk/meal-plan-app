@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, BASE_URL } from '../../lib/api';
 import Button from '../../components/ui/Button';
+import { Search, X, Check, Globe, Upload } from 'lucide-react';
 
 const debounce = (func, delay) => {
   let timeoutId;
@@ -10,10 +11,14 @@ const debounce = (func, delay) => {
   };
 };
 
-const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill }) => {
+const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill, onWebImage }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [showImageSearch, setShowImageSearch] = useState(false);
+  const [imageQuery, setImageQuery] = useState('');
+  const [imageResults, setImageResults] = useState([]);
+  const [imageSearching, setImageSearching] = useState(false);
 
   const debouncedSearch = useCallback(
     debounce(async (query) => {
@@ -39,7 +44,26 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill }) => {
     setSearchResults([]);
   };
 
-  const imageUrl = meal.image_url ? `${BASE_URL}${meal.image_url}` : null;
+  const handleImageSearch = async (q) => {
+    if (!q.trim()) { setImageResults([]); return; }
+    setImageSearching(true);
+    try {
+      const data = await api(`/api/meals/image-search?q=${encodeURIComponent(q)}`);
+      setImageResults(data.photos || []);
+    } catch {
+      setImageResults([]);
+    } finally {
+      setImageSearching(false);
+    }
+  };
+
+  const handleSelectWebImage = (photo) => {
+    onWebImage(meal.id, photo.full);
+    setShowImageSearch(false);
+    setImageResults([]);
+  };
+
+  const imagePreview = meal.web_image_url || (meal.image_url ? `${BASE_URL}${meal.image_url}` : null);
 
   return (
     <div className="p-4 bg-white/50 dark:bg-slate-700/50 rounded-lg border border-border-light dark:border-slate-700 relative">
@@ -97,14 +121,96 @@ const MealSlotForm = ({ meal, onUpdate, onFileChange, onAutofill }) => {
           />
         </div>
         <div>
-          <label className="text-xs text-text-secondary dark:text-gray-400">Image</label>
-          {imageUrl && <img src={imageUrl} alt="Current" className="w-full h-24 object-cover rounded-md my-2" />}
-          <input
-            type="file"
-            onChange={(e) => onFileChange(meal.id, e.target.files[0])}
-            accept="image/*"
-            className="input w-full text-xs bg-white/80 border-gray-300 rounded-md dark:bg-slate-600 dark:border-slate-500 dark:text-white"
-          />
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs text-text-secondary dark:text-gray-400">Image</label>
+            <button
+              type="button"
+              onClick={() => {
+                setShowImageSearch(s => !s);
+                if (!showImageSearch && meal.dish_name) {
+                  setImageQuery(meal.dish_name);
+                  handleImageSearch(meal.dish_name);
+                }
+              }}
+              className="flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              <Search size={11} />
+              Search Web
+            </button>
+          </div>
+
+          {imagePreview && (
+            <div className="relative mb-2">
+              <img src={imagePreview} alt="Preview" className="w-full h-24 object-cover rounded-md" />
+              {meal.web_image_url && (
+                <button
+                  type="button"
+                  onClick={() => onWebImage(meal.id, null)}
+                  className="absolute top-1 right-1 bg-black/50 rounded-full p-0.5 text-white hover:bg-black/70"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          )}
+
+          {showImageSearch ? (
+            <div className="space-y-2">
+              <div className="flex gap-1">
+                <input
+                  type="text"
+                  value={imageQuery}
+                  onChange={(e) => setImageQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleImageSearch(imageQuery)}
+                  placeholder="Search food images..."
+                  className="input flex-1 text-xs bg-white/80 border-gray-300 rounded-md dark:bg-slate-600 dark:border-slate-500 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleImageSearch(imageQuery)}
+                  className="px-2 py-1 bg-primary text-white rounded-md text-xs"
+                >
+                  {imageSearching ? '...' : <Search size={13} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowImageSearch(false); setImageResults([]); }}
+                  className="px-2 py-1 bg-slate-200 dark:bg-slate-600 rounded-md text-xs"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+              {imageResults.length > 0 && (
+                <div className="grid grid-cols-3 gap-1 max-h-48 overflow-y-auto">
+                  {imageResults.map(photo => (
+                    <button
+                      key={photo.id}
+                      type="button"
+                      onClick={() => handleSelectWebImage(photo)}
+                      className={`relative rounded overflow-hidden border-2 transition-all ${meal.web_image_url === photo.full ? 'border-primary' : 'border-transparent hover:border-primary/50'}`}
+                    >
+                      <img src={photo.thumb} alt="" className="w-full h-16 object-cover" />
+                      {meal.web_image_url === photo.full && (
+                        <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                          <Check size={16} className="text-primary" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {imageResults.length > 0 && (
+                <p className="text-[10px] text-text-secondary dark:text-gray-500">Photos provided by Pexels</p>
+              )}
+            </div>
+          ) : (
+            <input
+              type="file"
+              onChange={(e) => { onFileChange(meal.id, e.target.files[0]); onWebImage(meal.id, null); }}
+              accept="image/*"
+              className="input w-full text-xs bg-white/80 border-gray-300 rounded-md dark:bg-slate-600 dark:border-slate-500 dark:text-white"
+            />
+          )}
         </div>
       </div>
     </div>
@@ -159,21 +265,21 @@ export default function AdminMeals() {
 
     const sunday = new Date(sundayDate);
     sunday.setHours(17, 0, 0, 0);
-    newSlots.push({ id: 'dinner-sun', meal_date: sunday.toISOString(), meal_type: 'Dinner', dish_name: '', description: '', image_url: null, late_plate_hours_before: null });
+    newSlots.push({ id: 'dinner-sun', meal_date: sunday.toISOString(), meal_type: 'Dinner', dish_name: '', description: '', image_url: null, web_image_url: null, late_plate_hours_before: null });
 
     for (let i = 1; i <= 4; i++) {
       const day = new Date(sundayDate);
       day.setDate(sundayDate.getDate() + i);
       const lunchDate = new Date(day); lunchDate.setHours(12, 0, 0, 0);
       const dinnerDate = new Date(day); dinnerDate.setHours(17, 0, 0, 0);
-      newSlots.push({ id: `lunch-${i}`, meal_date: lunchDate.toISOString(), meal_type: 'Lunch', dish_name: '', description: '', image_url: null, late_plate_hours_before: null });
-      newSlots.push({ id: `dinner-${i}`, meal_date: dinnerDate.toISOString(), meal_type: 'Dinner', dish_name: '', description: '', image_url: null, late_plate_hours_before: null });
+      newSlots.push({ id: `lunch-${i}`, meal_date: lunchDate.toISOString(), meal_type: 'Lunch', dish_name: '', description: '', image_url: null, web_image_url: null, late_plate_hours_before: null });
+      newSlots.push({ id: `dinner-${i}`, meal_date: dinnerDate.toISOString(), meal_type: 'Dinner', dish_name: '', description: '', image_url: null, web_image_url: null, late_plate_hours_before: null });
     }
 
     const friday = new Date(sundayDate);
     friday.setDate(sundayDate.getDate() + 5);
     friday.setHours(12, 0, 0, 0);
-    newSlots.push({ id: 'lunch-fri', meal_date: friday.toISOString(), meal_type: 'Lunch', dish_name: '', description: '', image_url: null, late_plate_hours_before: null });
+    newSlots.push({ id: 'lunch-fri', meal_date: friday.toISOString(), meal_type: 'Lunch', dish_name: '', description: '', image_url: null, web_image_url: null, late_plate_hours_before: null });
 
     setMealSlots(newSlots);
     setImageFiles({});
@@ -191,7 +297,12 @@ export default function AdminMeals() {
 
   const handleFileChange = (id, file) => {
     setImageFiles(cur => ({ ...cur, [id]: file }));
-    setMealSlots(cur => cur.map(slot => slot.id === id ? { ...slot, image_url: null } : slot));
+    setMealSlots(cur => cur.map(slot => slot.id === id ? { ...slot, image_url: null, web_image_url: null } : slot));
+  };
+
+  const handleWebImage = (id, url) => {
+    setMealSlots(cur => cur.map(slot => slot.id === id ? { ...slot, web_image_url: url } : slot));
+    if (url) setImageFiles(cur => { const n = { ...cur }; delete n[id]; return n; });
   };
 
   const handleSaveAll = async () => {
@@ -252,7 +363,7 @@ export default function AdminMeals() {
                     Lunch
                   </span>
                   {Lunch ? (
-                    <MealSlotForm meal={Lunch} onUpdate={handleUpdateSlot} onFileChange={handleFileChange} onAutofill={handleAutofillSlot} />
+                    <MealSlotForm meal={Lunch} onUpdate={handleUpdateSlot} onFileChange={handleFileChange} onAutofill={handleAutofillSlot} onWebImage={handleWebImage} />
                   ) : (
                     <div className="rounded-lg border border-dashed border-border-light p-6 text-center text-sm text-text-secondary dark:border-slate-600 dark:text-gray-500">
                       Not scheduled
@@ -264,7 +375,7 @@ export default function AdminMeals() {
                     Dinner
                   </span>
                   {Dinner ? (
-                    <MealSlotForm meal={Dinner} onUpdate={handleUpdateSlot} onFileChange={handleFileChange} onAutofill={handleAutofillSlot} />
+                    <MealSlotForm meal={Dinner} onUpdate={handleUpdateSlot} onFileChange={handleFileChange} onAutofill={handleAutofillSlot} onWebImage={handleWebImage} />
                   ) : (
                     <div className="rounded-lg border border-dashed border-border-light p-6 text-center text-sm text-text-secondary dark:border-slate-600 dark:text-gray-500">
                       Not scheduled

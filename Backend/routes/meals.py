@@ -1,15 +1,66 @@
+import io
 import json
+import os
 import uuid
+import requests as req_lib
+from collections import defaultdict
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, g
 from sqlalchemy import func, and_
 from werkzeug.utils import secure_filename
 
 from database import db
-from models import Meal, MealAttendance, User
-from helpers import jwt_required, admin_required, allowed_file, upload_file_to_s3, apply_preset_to_meal, _enrich_meals
+from models import Meal, MealAttendance, Review, LatePlate, User
+from helpers import jwt_required, admin_required, allowed_file, upload_file_to_s3, apply_preset_to_meal, _enrich_meals, _s3, AWS_BUCKET_NAME, S3_BASE_URL
+from analytics import welford_from_list, apply_zscores
 
 meals_bp = Blueprint('meals', __name__)
+
+_CONTENT_TYPE_TO_EXT = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif'}
+
+def _download_and_upload_web_image(url):
+    """Download an image from a URL and upload it to S3. Returns the S3 URL or None."""
+    try:
+        r = req_lib.get(url, timeout=10)
+        if not r.ok:
+            return None
+        content_type = r.headers.get('Content-Type', 'image/jpeg').split(';')[0].strip()
+        ext = _CONTENT_TYPE_TO_EXT.get(content_type, 'jpg')
+        s3_key = f"uploads/{uuid.uuid4()}.{ext}"
+        _s3.upload_fileobj(io.BytesIO(r.content), AWS_BUCKET_NAME, s3_key, ExtraArgs={"ContentType": content_type})
+        return f"{S3_BASE_URL}{s3_key}"
+    except Exception as e:
+        print(f"Web image download/upload error: {e}")
+        return None
+
+
+@meals_bp.route('/api/meals/image-search', methods=['GET'])
+@admin_required
+def search_meal_images():
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify({'photos': []}), 200
+    pexels_key = os.getenv('PEXELS_API_KEY')
+    if not pexels_key:
+        return jsonify({'error': 'Image search not configured. Add PEXELS_API_KEY to .env on the server.'}), 503
+    try:
+        resp = req_lib.get(
+            'https://api.pexels.com/v1/search',
+            headers={'Authorization': pexels_key},
+            params={'query': query, 'per_page': 12, 'orientation': 'landscape'},
+            timeout=5,
+        )
+        data = resp.json()
+        photos = [{
+            'id': p['id'],
+            'thumb': p['src']['medium'],
+            'full': p['src']['large'],
+            'photographer': p['photographer'],
+        } for p in data.get('photos', [])]
+        return jsonify({'photos': photos}), 200
+    except Exception as e:
+        print(f"Pexels search error: {e}")
+        return jsonify({'error': 'Image search failed.'}), 500
 
 
 @meals_bp.route('/api/today-meals', methods=['GET'])
@@ -116,23 +167,98 @@ def get_past_meals():
             ).label('all_occurrences'),
         ).group_by(instances_sq.c.dish_name).order_by(instances_sq.c.dish_name).all()
 
+        # Build meal_id → dish_name map and collect all meal IDs
+        meal_id_to_dish = {}
         meals_data = []
         for dish_name, description, image_url, average_attendance, all_occurrences in grouped:
+            occurrences = sorted([
+                {'id': occ['id'], 'date': datetime.fromisoformat(occ['date']), 'meal_type': occ['meal_type'], 'attendance': occ['attendance']}
+                for occ in all_occurrences
+            ], key=lambda x: x['date'], reverse=True)
+            for occ in occurrences:
+                meal_id_to_dish[occ['id']] = dish_name
             meals_data.append({
                 'dish_name': dish_name,
                 'description': description,
                 'image_url': image_url,
                 'average_attendance': round(average_attendance, 2) if average_attendance else 0,
-                'past_occurrences': sorted([
-                    {'id': occ['id'], 'date': datetime.fromisoformat(occ['date']), 'meal_type': occ['meal_type'], 'attendance': occ['attendance']}
-                    for occ in all_occurrences
-                ], key=lambda x: x['date'], reverse=True),
+                'past_occurrences': occurrences,
             })
+
+        # Fetch all reviews for past meal instances and group by dish_name
+        all_meal_ids = list(meal_id_to_dish.keys())
+        ratings_by_dish = defaultdict(list)
+        if all_meal_ids:
+            for meal_id, rating in db.session.query(Review.meal_id, Review.rating).filter(
+                Review.meal_id.in_(all_meal_ids)
+            ).all():
+                dish = meal_id_to_dish.get(meal_id)
+                if dish:
+                    ratings_by_dish[dish].append(rating)
+
+        # Apply Welford's algorithm per dish
+        for dish in meals_data:
+            stats = welford_from_list(ratings_by_dish.get(dish['dish_name'], []))
+            dish['avg_rating'] = stats['mean']
+            dish['review_count'] = stats['n']
+            dish['rating_std'] = stats['std']
+            dish['sharpe_analog'] = stats['sharpe_analog']
+
+        # Apply cross-sectional z-scores across all dishes
+        apply_zscores(meals_data, key='avg_rating')
+
         return jsonify({'meals': meals_data}), 200
     except Exception as e:
         db.session.rollback()
         print(f"Error fetching past meals: {e}")
         return jsonify({'error': 'Failed to fetch past meals.'}), 500
+
+
+@meals_bp.route('/api/pending-reviews', methods=['GET'])
+@jwt_required
+def get_pending_reviews():
+    """Meals from the last 7 days the user attended or got a late plate for but hasn't reviewed."""
+    try:
+        user_id = g.current_user.id
+        now = datetime.now()
+        seven_days_ago = now - timedelta(days=7)
+
+        attended_ids = {
+            a.meal_id for a in MealAttendance.query.filter_by(user_id=user_id).all()
+        }
+        late_plate_ids = {
+            lp.meal_id for lp in LatePlate.query.filter_by(user_id=user_id).all()
+        }
+        eligible_ids = attended_ids | late_plate_ids
+        if not eligible_ids:
+            return jsonify({'meals': []}), 200
+
+        past_meals = Meal.query.filter(
+            Meal.id.in_(eligible_ids),
+            Meal.meal_date < now,
+            Meal.meal_date >= seven_days_ago,
+            Meal.chapter_id == g.current_user.chapter_id,
+        ).order_by(Meal.meal_date.desc()).all()
+
+        reviewed_ids = {
+            r.meal_id for r in Review.query.filter(
+                Review.user_id == user_id,
+                Review.meal_id.in_([m.id for m in past_meals]),
+            ).all()
+        }
+
+        return jsonify({'meals': [
+            {
+                'id': m.id,
+                'dish_name': m.dish_name,
+                'meal_type': m.meal_type,
+                'meal_date': m.meal_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            }
+            for m in past_meals if m.id not in reviewed_ids
+        ]}), 200
+    except Exception as e:
+        print(f"Error fetching pending reviews: {e}")
+        return jsonify({'error': 'Failed to fetch pending reviews.'}), 500
 
 
 @meals_bp.route('/api/meals/<int:meal_id>', methods=['GET'])
@@ -303,6 +429,8 @@ def add_bulk_meals():
                     image_url = upload_file_to_s3(file, unique_filename)
                     if not image_url:
                         return jsonify({'error': f"Failed to upload image for meal {meal_data['id']}."}), 500
+            elif meal_data.get('web_image_url') and not image_url:
+                image_url = _download_and_upload_web_image(meal_data['web_image_url'])
 
             new_meal = Meal(
                 meal_date=datetime.fromisoformat(meal_data['meal_date']),

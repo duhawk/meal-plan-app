@@ -8,22 +8,24 @@ export default function AdminRecommendations() {
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { user } = useUser();
+  const { user, loading: userLoading } = useUser();
 
   useEffect(() => {
+    if (userLoading) return;
     if (user && (user.is_admin || user.is_owner)) {
       fetchRecommendations();
     } else {
       setError('You do not have permission to view this page.');
       setLoading(false);
     }
-  }, [user]);
+  }, [user, userLoading]);
 
   const fetchRecommendations = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await api('/api/admin/recommendations');
-      setRecommendations(response);
+      setRecommendations(response.recommendations);
     } catch (err) {
       setError(err.message || 'Failed to fetch recommendations.');
     } finally {
